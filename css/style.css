@@ -39,7 +39,7 @@ body {
 /* ── Hero ────────────────────────────────────────────────── */
 .hero {
   background: var(--surface);
-  border-radius: var(--radius-lg);
+  /* border-radius removed — squircle.js applies clip-path */
   padding: 2.25rem 2.5rem 2rem;
   display: flex;
   flex-direction: column;
@@ -152,17 +152,18 @@ body {
 /* ── Card ────────────────────────────────────────────────── */
 .card {
   background: var(--surface);
-  border-radius: var(--radius-lg);
+  /* border-radius removed — squircle.js applies clip-path */
   overflow: hidden;
   display: flex;
   flex-direction: column;
   cursor: default;
-  transition: transform var(--transition), box-shadow var(--transition);
+  /* filter: drop-shadow follows the squircle outline (box-shadow doesn't) */
+  transition: transform var(--transition), filter var(--transition);
 }
 
 .card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 8px 28px rgba(0,0,0,0.07);
+  filter: drop-shadow(0 8px 28px rgba(0, 0, 0, 0.10));
 }
 
 /* ── Preview area ────────────────────────────────────────── */
@@ -244,9 +245,10 @@ body {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: var(--radius-sm);
+  /* border-radius removed — squircle.js applies clip-path */
   color: var(--text);
   text-decoration: none;
+  background: transparent;
   transition: background var(--transition);
   flex-shrink: 0;
 }

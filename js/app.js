@@ -98,6 +98,14 @@ function buildCard(tool) {
 
   card.appendChild(preview);
   card.appendChild(body);
+
+  // Apply squircle after card is in the DOM (ResizeObserver fires on first size)
+  requestAnimationFrame(() => {
+    applySquircle(card, 22);
+    const action = card.querySelector(".card-action");
+    if (action) applySquircle(action, 8);
+  });
+
   return card;
 }
 
@@ -125,6 +133,9 @@ function renderCards(filter = "all", query = "") {
 
 // ── Init ──────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
+  // Squircle the hero banner
+  applySquircle(document.querySelector(".hero"), 28);
+
   buildFilters();
   renderCards();
 
