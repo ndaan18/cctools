@@ -52,16 +52,36 @@ const ICON_PLACEHOLDER = `<svg xmlns="http://www.w3.org/2000/svg" width="48" hei
   <polyline points="21 15 16 10 5 21"/>
 </svg>`;
 
+// ── Active filter state ───────────────────────────────────
+// Each group (software / type) holds at most one selected key.
+// Results = tools that match BOTH active filters (AND).
+const activeFilters = { software: null, type: null };
+
+function syncFilterButtons() {
+  const bar = document.getElementById("filter-bar");
+  const noneActive = !activeFilters.software && !activeFilters.type;
+  bar.querySelectorAll(".filter-btn").forEach(btn => {
+    if (btn.dataset.filter === "all") {
+      btn.classList.toggle("active", noneActive);
+    } else {
+      btn.classList.toggle("active",
+        btn.dataset.filter === activeFilters.software ||
+        btn.dataset.filter === activeFilters.type
+      );
+    }
+  });
+}
+
 // ── Filter bar ────────────────────────────────────────────
 function buildFilters() {
   const bar = document.getElementById("filter-bar");
 
-  // Collect which tags are actually used, preserving TAG_ORDER
+  // Only show tags that are actually used, in TAG_ORDER order
   const usedTags = TAG_ORDER.filter(key =>
     tools.some(t => Array.isArray(t.tags) && t.tags.includes(key))
   );
 
-  // "All" button
+  // "All" button — starts active
   const allBtn = document.createElement("button");
   allBtn.className = "filter-btn active";
   allBtn.dataset.filter = "all";
@@ -72,8 +92,6 @@ function buildFilters() {
   let lastGroup = null;
   usedTags.forEach(key => {
     const tag = getTag(key);
-
-    // Insert divider when group changes
     if (lastGroup !== null && tag.group !== lastGroup) {
       const sep = document.createElement("span");
       sep.className = "filter-sep";
@@ -93,10 +111,20 @@ function buildFilters() {
   bar.addEventListener("click", e => {
     const btn = e.target.closest(".filter-btn");
     if (!btn) return;
-    bar.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    const search = document.getElementById("search")?.value.trim() || "";
-    renderCards(btn.dataset.filter, search);
+
+    if (btn.dataset.filter === "all") {
+      // Reset both groups
+      activeFilters.software = null;
+      activeFilters.type = null;
+    } else {
+      const group = btn.dataset.group; // "software" | "type"
+      const key   = btn.dataset.filter;
+      // Toggle: clicking the active one deselects it; clicking a new one selects it
+      activeFilters[group] = activeFilters[group] === key ? null : key;
+    }
+
+    syncFilterButtons();
+    applyFilters();
   });
 }
 
@@ -168,28 +196,30 @@ function buildCard(tool) {
 }
 
 // ── Render ────────────────────────────────────────────────
-function renderCards(filter = "all", query = "") {
-  const grid = document.getElementById("grid");
+function applyFilters() {
+  const grid  = document.getElementById("grid");
   const empty = document.getElementById("empty");
+  const query = document.getElementById("search")?.value.trim().toLowerCase() || "";
   grid.innerHTML = "";
 
-  let filtered = filter === "all"
-    ? tools
-    : tools.filter(t => Array.isArray(t.tags) && t.tags.includes(filter));
+  let filtered = tools;
 
+  // AND the two group filters together
+  if (activeFilters.software)
+    filtered = filtered.filter(t => Array.isArray(t.tags) && t.tags.includes(activeFilters.software));
+  if (activeFilters.type)
+    filtered = filtered.filter(t => Array.isArray(t.tags) && t.tags.includes(activeFilters.type));
+
+  // Text search across name, description, and tag labels
   if (query) {
-    const q = query.toLowerCase();
     filtered = filtered.filter(t =>
-      t.name.toLowerCase().includes(q) ||
-      t.description.toLowerCase().includes(q) ||
-      (t.tags || []).some(tag => getTag(tag).label.toLowerCase().includes(q))
+      t.name.toLowerCase().includes(query) ||
+      t.description.toLowerCase().includes(query) ||
+      (t.tags || []).some(tag => getTag(tag).label.toLowerCase().includes(query))
     );
   }
 
-  if (filtered.length === 0) {
-    empty.hidden = false;
-    return;
-  }
+  if (filtered.length === 0) { empty.hidden = false; return; }
   empty.hidden = true;
   filtered.forEach(tool => grid.appendChild(buildCard(tool)));
 }
@@ -198,11 +228,7 @@ function renderCards(filter = "all", query = "") {
 document.addEventListener("DOMContentLoaded", () => {
   applySquircle(document.querySelector(".hero"), 28);
   buildFilters();
-  renderCards();
+  applyFilters();
 
-  const input = document.getElementById("search");
-  input.addEventListener("input", () => {
-    const activeFilter = document.querySelector(".filter-btn.active")?.dataset.filter || "all";
-    renderCards(activeFilter, input.value.trim());
-  });
+  document.getElementById("search").addEventListener("input", applyFilters);
 });
