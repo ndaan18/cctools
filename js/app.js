@@ -14,7 +14,6 @@ const TAG_DEFS = {
   "script":          { label: "Script",           group: "type" },
   "plugin":          { label: "Plugin",           group: "type" },
   "preset":          { label: "Preset",           group: "type" },
-  "openfx":          { label: "OpenFX",           group: "type" },
   "expression":      { label: "Expression",       group: "type" },
   "tool":            { label: "Tool",             group: "type" },
   "shader":          { label: "Shader",           group: "type" },
@@ -25,7 +24,7 @@ const TAG_DEFS = {
 // Order filter buttons appear in (only present tags are shown)
 const TAG_ORDER = [
   "after-effects", "illustrator", "premiere-pro", "davinci-resolve", "cinema-4d", "touchdesigner", "html",
-  "script", "plugin", "preset", "openfx", "expression", "tool", "shader", "template", "generator",
+  "script", "plugin", "preset", "expression", "tool", "shader", "template", "generator",
 ];
 
 function getTag(key) {
