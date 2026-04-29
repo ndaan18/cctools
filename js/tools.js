@@ -8,7 +8,7 @@
 
 const tools = [
   {
-    name: "Stash EX",
+    name: "Stash EX V1.0",
     description: "Dockable expression library panel for After Effects. Save, organise, and apply expressions with their Effect Controls directly from the panel. Supports categories, favourites, import/export, and one-click apply with auto-created controllers.",
     category: "ae-plugin",
     action: "download",
