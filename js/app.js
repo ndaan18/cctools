@@ -60,16 +60,47 @@ const activeFilters = { software: null, type: null };
 function syncFilterButtons() {
   const bar = document.getElementById("filter-bar");
   const noneActive = !activeFilters.software && !activeFilters.type;
-  bar.querySelectorAll(".filter-btn").forEach(btn => {
-    if (btn.dataset.filter === "all") {
-      btn.classList.toggle("active", noneActive);
-    } else {
-      btn.classList.toggle("active",
-        btn.dataset.filter === activeFilters.software ||
-        btn.dataset.filter === activeFilters.type
-      );
+
+  let visibleSoftware = 0;
+  let visibleType     = 0;
+
+  bar.querySelectorAll(".filter-btn[data-group]").forEach(btn => {
+    const key   = btn.dataset.filter;
+    const group = btn.dataset.group; // "software" | "type"
+
+    // Active state
+    btn.classList.toggle("active",
+      key === activeFilters.software || key === activeFilters.type
+    );
+
+    // A button is compatible if at least one tool carries this tag AND
+    // satisfies the other group's currently active filter.
+    const otherGroup = group === "software" ? "type" : "software";
+    const otherActive = activeFilters[otherGroup];
+
+    const compatible = tools.some(t => {
+      if (!Array.isArray(t.tags) || !t.tags.includes(key)) return false;
+      if (otherActive && !t.tags.includes(otherActive)) return false;
+      return true;
+    });
+
+    // Always keep the currently selected button visible
+    const isSelected = key === activeFilters[group];
+    btn.hidden = !compatible && !isSelected;
+
+    if (!btn.hidden) {
+      if (group === "software") visibleSoftware++;
+      else visibleType++;
     }
   });
+
+  // Hide the separator if one side has no visible buttons
+  const sep = bar.querySelector(".filter-sep");
+  if (sep) sep.hidden = visibleSoftware === 0 || visibleType === 0;
+
+  // All button
+  const allBtn = bar.querySelector(".filter-btn[data-filter='all']");
+  if (allBtn) allBtn.classList.toggle("active", noneActive);
 }
 
 // ── Filter bar ────────────────────────────────────────────
@@ -228,6 +259,7 @@ function applyFilters() {
 document.addEventListener("DOMContentLoaded", () => {
   applySquircle(document.querySelector(".hero"), 28);
   buildFilters();
+  syncFilterButtons();
   applyFilters();
 
   document.getElementById("search").addEventListener("input", applyFilters);
