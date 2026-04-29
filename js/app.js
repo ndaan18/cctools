@@ -4,10 +4,10 @@
 const TAG_DEFS = {
   // Software
   "after-effects":   { label: "After Effects",   group: "software" },
+  "illustrator":     { label: "Illustrator",    group: "software" },
+  "premiere-pro":    { label: "Premiere Pro",   group: "software" },
   "davinci-resolve": { label: "DaVinci Resolve",  group: "software" },
   "cinema-4d":       { label: "Cinema 4D",        group: "software" },
-  "blender":         { label: "Blender",          group: "software" },
-  "houdini":         { label: "Houdini",          group: "software" },
   "touchdesigner":   { label: "TouchDesigner",    group: "software" },
   "html":            { label: "HTML",             group: "software" },
   // Type
@@ -24,7 +24,7 @@ const TAG_DEFS = {
 
 // Order filter buttons appear in (only present tags are shown)
 const TAG_ORDER = [
-  "after-effects", "davinci-resolve", "cinema-4d", "blender", "houdini", "touchdesigner", "html",
+  "after-effects", "illustrator", "premiere-pro", "davinci-resolve", "cinema-4d", "touchdesigner", "html",
   "script", "plugin", "preset", "openfx", "expression", "tool", "shader", "template", "generator",
 ];
 

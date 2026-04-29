@@ -14,14 +14,14 @@ const tools = [
   {
     name: "SpeedTrace",
     description: "Drop a video and extract pose data frame by frame using MediaPipe. Outputs an .mgjson file you can import directly into After Effects, plus a raw .csv. Runs fully in-browser — nothing is uploaded.",
-    tags: ["html", "tool", "after-effects"],
+    tags: ["html", "tool"],
     action: "link",
     url: "tools/SpeedTrace.html",
   },
   {
     name: "StashEX",
     description: "Dockable expression library panel for After Effects. Save, organise, and apply expressions with their Effect Controls directly from the panel. Supports categories, favourites, import/export, and one-click apply with auto-created controllers.",
-    tags: ["after-effects", "script", "expression"],
+    tags: ["after-effects", "script"],
     action: "download",
     url: "plugins/StashEX.jsx",
     // image: "previews/stashex.png",
