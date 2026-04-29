@@ -102,6 +102,17 @@ body {
   color: #fff;
 }
 
+/* Thin vertical rule between software and type groups */
+.filter-sep {
+  display: inline-block;
+  width: 1px;
+  height: 1.125rem;
+  background: var(--border);
+  margin: 0 0.2rem;
+  align-self: center;
+  flex-shrink: 0;
+}
+
 /* ── Search ──────────────────────────────────────────────── */
 .search-wrap {
   position: relative;
@@ -225,19 +236,42 @@ body {
 /* ── Card footer ─────────────────────────────────────────── */
 .card-footer {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
+  gap: 0.5rem;
   margin-top: 0.875rem;
 }
 
+/* Badge row wraps when there are many tags */
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+/* Base badge */
 .badge {
   border: 1.5px solid var(--border);
   border-radius: var(--radius-pill);
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.6875rem;
   font-weight: 500;
   letter-spacing: 0.02em;
-  padding: 0.25rem 0.65rem;
+  padding: 0.2rem 0.6rem;
+  white-space: nowrap;
+}
+
+/* Software badges are slightly more prominent */
+.badge[data-group="software"] {
+  border-color: var(--subtle);
+  color: var(--text);
+}
+
+/* Type badges stay muted */
+.badge[data-group="type"] {
+  border-color: var(--border);
+  color: var(--muted);
 }
 
 .card-action {

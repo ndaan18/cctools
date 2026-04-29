@@ -1,12 +1,35 @@
-const categoryMeta = {
-  "html-tool": { label: "HTML Tool" },
-  "ae-plugin":  { label: "AE Script"  },
-  "openfx":     { label: "OpenFX"     },
-  "other":      { label: "Other"      },
+// ── Tag definitions ───────────────────────────────────────
+// group "software" = what app/platform the tool runs in
+// group "type"     = what kind of file/artifact it is
+const TAG_DEFS = {
+  // Software
+  "after-effects":   { label: "After Effects",   group: "software" },
+  "davinci-resolve": { label: "DaVinci Resolve",  group: "software" },
+  "cinema-4d":       { label: "Cinema 4D",        group: "software" },
+  "blender":         { label: "Blender",          group: "software" },
+  "houdini":         { label: "Houdini",          group: "software" },
+  "touchdesigner":   { label: "TouchDesigner",    group: "software" },
+  "html":            { label: "HTML",             group: "software" },
+  // Type
+  "script":          { label: "Script",           group: "type" },
+  "plugin":          { label: "Plugin",           group: "type" },
+  "preset":          { label: "Preset",           group: "type" },
+  "openfx":          { label: "OpenFX",           group: "type" },
+  "expression":      { label: "Expression",       group: "type" },
+  "tool":            { label: "Tool",             group: "type" },
+  "shader":          { label: "Shader",           group: "type" },
+  "template":        { label: "Template",         group: "type" },
+  "generator":       { label: "Generator",        group: "type" },
 };
 
-function getCategoryMeta(category) {
-  return categoryMeta[category] || { label: category };
+// Order filter buttons appear in (only present tags are shown)
+const TAG_ORDER = [
+  "after-effects", "davinci-resolve", "cinema-4d", "blender", "houdini", "touchdesigner", "html",
+  "script", "plugin", "preset", "openfx", "expression", "tool", "shader", "template", "generator",
+];
+
+function getTag(key) {
+  return TAG_DEFS[key] || { label: key, group: "type" };
 }
 
 // ── SVG icons ─────────────────────────────────────────────
@@ -31,21 +54,39 @@ const ICON_PLACEHOLDER = `<svg xmlns="http://www.w3.org/2000/svg" width="48" hei
 
 // ── Filter bar ────────────────────────────────────────────
 function buildFilters() {
-  const present = [...new Set(tools.map(t => t.category))];
   const bar = document.getElementById("filter-bar");
 
+  // Collect which tags are actually used, preserving TAG_ORDER
+  const usedTags = TAG_ORDER.filter(key =>
+    tools.some(t => Array.isArray(t.tags) && t.tags.includes(key))
+  );
+
+  // "All" button
   const allBtn = document.createElement("button");
   allBtn.className = "filter-btn active";
   allBtn.dataset.filter = "all";
   allBtn.textContent = "All";
   bar.appendChild(allBtn);
 
-  present.forEach(cat => {
-    const meta = getCategoryMeta(cat);
+  // Group buttons with a divider between software and type
+  let lastGroup = null;
+  usedTags.forEach(key => {
+    const tag = getTag(key);
+
+    // Insert divider when group changes
+    if (lastGroup !== null && tag.group !== lastGroup) {
+      const sep = document.createElement("span");
+      sep.className = "filter-sep";
+      sep.setAttribute("aria-hidden", "true");
+      bar.appendChild(sep);
+    }
+    lastGroup = tag.group;
+
     const btn = document.createElement("button");
     btn.className = "filter-btn";
-    btn.dataset.filter = cat;
-    btn.textContent = meta.label;
+    btn.dataset.filter = key;
+    btn.dataset.group = tag.group;
+    btn.textContent = tag.label;
     bar.appendChild(btn);
   });
 
@@ -54,18 +95,18 @@ function buildFilters() {
     if (!btn) return;
     bar.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
-    renderCards(btn.dataset.filter);
+    const search = document.getElementById("search")?.value.trim() || "";
+    renderCards(btn.dataset.filter, search);
   });
 }
 
 // ── Card builder ──────────────────────────────────────────
 function buildCard(tool) {
-  const meta = getCategoryMeta(tool.category);
+  const tags = Array.isArray(tool.tags) ? tool.tags : [];
   const isDownload = tool.action === "download";
 
   const card = document.createElement("article");
   card.className = "card";
-  card.dataset.category = tool.category;
 
   // Preview
   const preview = document.createElement("div");
@@ -80,6 +121,12 @@ function buildCard(tool) {
     preview.innerHTML = `<div class="card-preview-placeholder">${ICON_PLACEHOLDER}</div>`;
   }
 
+  // Badges HTML
+  const badgesHTML = tags.map(key => {
+    const tag = getTag(key);
+    return `<span class="badge" data-group="${tag.group}">${tag.label}</span>`;
+  }).join("");
+
   // Body
   const body = document.createElement("div");
   body.className = "card-body";
@@ -87,7 +134,7 @@ function buildCard(tool) {
     <h2 class="card-title">${tool.name}</h2>
     <p class="card-desc">${tool.description}</p>
     <div class="card-footer">
-      <span class="badge">${meta.label}</span>
+      <div class="badge-row">${badgesHTML}</div>
       <a class="card-action"
          href="${tool.url}"
          ${isDownload ? "download" : 'target="_blank" rel="noopener"'}
@@ -99,9 +146,8 @@ function buildCard(tool) {
   card.appendChild(preview);
   card.appendChild(body);
 
-  // Whole card is clickable — clicking anywhere triggers the same action as the icon
+  // Whole card is clickable
   card.addEventListener("click", e => {
-    // If the click landed directly on the <a> icon, let it handle itself
     if (e.target.closest(".card-action")) return;
     if (isDownload) {
       const a = Object.assign(document.createElement("a"), { href: tool.url, download: "" });
@@ -111,7 +157,7 @@ function buildCard(tool) {
     }
   });
 
-  // Apply squircle after card is in the DOM (ResizeObserver fires on first size)
+  // Squircle corners
   requestAnimationFrame(() => {
     applySquircle(card, 22);
     const action = card.querySelector(".card-action");
@@ -127,11 +173,16 @@ function renderCards(filter = "all", query = "") {
   const empty = document.getElementById("empty");
   grid.innerHTML = "";
 
-  let filtered = filter === "all" ? tools : tools.filter(t => t.category === filter);
+  let filtered = filter === "all"
+    ? tools
+    : tools.filter(t => Array.isArray(t.tags) && t.tags.includes(filter));
+
   if (query) {
     const q = query.toLowerCase();
     filtered = filtered.filter(t =>
-      t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)
+      t.name.toLowerCase().includes(q) ||
+      t.description.toLowerCase().includes(q) ||
+      (t.tags || []).some(tag => getTag(tag).label.toLowerCase().includes(q))
     );
   }
 
@@ -145,9 +196,7 @@ function renderCards(filter = "all", query = "") {
 
 // ── Init ──────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
-  // Squircle the hero banner
   applySquircle(document.querySelector(".hero"), 28);
-
   buildFilters();
   renderCards();
 
