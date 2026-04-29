@@ -156,7 +156,8 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  cursor: default;
+  cursor: pointer;
+  position: relative; /* needed so card-action::after can cover the whole card */
   /* filter: drop-shadow follows the squircle outline (box-shadow doesn't) */
   transition: transform var(--transition), filter var(--transition);
 }

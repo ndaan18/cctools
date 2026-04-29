@@ -99,6 +99,18 @@ function buildCard(tool) {
   card.appendChild(preview);
   card.appendChild(body);
 
+  // Whole card is clickable — clicking anywhere triggers the same action as the icon
+  card.addEventListener("click", e => {
+    // If the click landed directly on the <a> icon, let it handle itself
+    if (e.target.closest(".card-action")) return;
+    if (isDownload) {
+      const a = Object.assign(document.createElement("a"), { href: tool.url, download: "" });
+      a.click();
+    } else {
+      window.open(tool.url, "_blank", "noopener");
+    }
+  });
+
   // Apply squircle after card is in the DOM (ResizeObserver fires on first size)
   requestAnimationFrame(() => {
     applySquircle(card, 22);
