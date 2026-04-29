@@ -33,4 +33,11 @@ const tools = [
     action: "download",
     url: "plugins/ColorSwap.jsx",
   },
+  {
+    name: "TheDoF Macintosh [WIP]",
+    description: "The fusion depth of field node you will actually want to use. Fast, easy and customisable to the bone.",
+    tags: ["davinci-resolve", "plugin", "openfx"],
+    action: "download",
+    url: "plugins/TheDoF.pkg",
+  }
 ];
