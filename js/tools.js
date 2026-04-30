@@ -16,7 +16,7 @@ const tools = [
     description: "Drop a video and extract pose data frame by frame using MediaPipe. Outputs an .mgjson file you can import directly into After Effects, plus a raw .csv. Runs fully in-browser — nothing is uploaded.",
     tags: ["html", "tool", "active"],
     action: "link",
-    url: "tools/SpeedTrace.html",
+    url: "content/tools/SpeedTrace.html",
   },
   {
     name: "StashEX",
