@@ -3,28 +3,33 @@
 // group "type"     = what kind of file/artifact it is
 const TAG_DEFS = {
   // Software
-  "after-effects":   { label: "After Effects",   group: "software" },
-  "illustrator":     { label: "Illustrator",    group: "software" },
-  "premiere-pro":    { label: "Premiere Pro",   group: "software" },
-  "davinci-resolve": { label: "DaVinci Resolve",  group: "software" },
-  "cinema-4d":       { label: "Cinema 4D",        group: "software" },
-  "touchdesigner":   { label: "TouchDesigner",    group: "software" },
-  "html":            { label: "HTML",             group: "software" },
+  "after-effects":    { label: "After Effects",    group: "software" },
+  "illustrator":      { label: "Illustrator",      group: "software" },
+  "premiere-pro":     { label: "Premiere Pro",     group: "software" },
+  "davinci-resolve":  { label: "DaVinci Resolve",  group: "software" },
+  "cinema-4d":        { label: "Cinema 4D",        group: "software" },
+  "touchdesigner":    { label: "TouchDesigner",    group: "software" },
+  "html":             { label: "HTML",             group: "software" },
   // Type
-  "script":          { label: "Script",           group: "type" },
-  "plugin":          { label: "Plugin",           group: "type" },
-  "preset":          { label: "Preset",           group: "type" },
-  "expression":      { label: "Expression",       group: "type" },
-  "tool":            { label: "Tool",             group: "type" },
-  "shader":          { label: "Shader",           group: "type" },
-  "template":        { label: "Template",         group: "type" },
-  "generator":       { label: "Generator",        group: "type" },
+  "script":           { label: "Script",           group: "type" },
+  "plugin":           { label: "Plugin",           group: "type" },
+  "preset":           { label: "Preset",           group: "type" },
+  "expression":       { label: "Expression",       group: "type" },
+  "tool":             { label: "Tool",             group: "type" },
+  "shader":           { label: "Shader",           group: "type" },
+  "template":         { label: "Template",         group: "type" },
+  "generator":        { label: "Generator",        group: "type" },
+  // Status
+  "active":           { label: "Active",           group: "status" },
+  "work-in-progress": { label: "WIP",              group: "status" },
+  "archived":         { label: "Archived",         group: "status" },
 };
 
 // Order filter buttons appear in (only present tags are shown)
 const TAG_ORDER = [
   "after-effects", "illustrator", "premiere-pro", "davinci-resolve", "cinema-4d", "touchdesigner", "html",
   "script", "plugin", "preset", "expression", "tool", "shader", "template", "generator",
+  "active", "work-in-progress", "archived"
 ];
 
 function getTag(key) {
