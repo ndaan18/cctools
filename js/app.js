@@ -95,6 +95,9 @@ function syncFilterButtons() {
     const compatible = tools.some(t => {
       if (!Array.isArray(t.tags) || !t.tags.includes(key)) return false;
       if (otherActive && !t.tags.includes(otherActive)) return false;
+      // Also require the tool's status to be in the currently shown set
+      const statusTags = t.tags.filter(tag => TAG_DEFS[tag]?.group === "status");
+      if (statusTags.length > 0 && !statusTags.some(s => activeFilters.shownStatuses.has(s))) return false;
       return true;
     });
 
