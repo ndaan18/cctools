@@ -23,7 +23,7 @@ const tools = [
     description: "Dockable expression library panel for After Effects. Save, organise, and apply expressions with their Effect Controls directly from the panel. Supports categories, favourites, import/export, and one-click apply with auto-created controllers.",
     tags: ["after-effects", "script", "active"],
     action: "download",
-    url: "plugins/StashEX.jsx",
+    url: "content/plugins/StashEX.jsx",
     // image: "previews/stashex.png",
   },
   {
@@ -31,13 +31,13 @@ const tools = [
     description: "Swap colors across shapes, strokes, and fills in seconds. Pick the color you want to replace, choose a new one, done. No more clicking through layers one by one.",
     tags: ["after-effects", "script", "active"],
     action: "download",
-    url: "plugins/ColorSwap.jsx",
+    url: "content/plugins/ColorSwap.jsx",
   },
   {
     name: "TheDoF Macintosh [WIP]",
     description: "The fusion depth of field node you will actually want to use. Fast, easy and customisable to the bone.",
     tags: ["davinci-resolve", "plugin", "work-in-progress"],
     action: "download",
-    url: "plugins/TheDoF.pkg",
+    url: "content/plugins/TheDoF.pkg",
   }
 ];
