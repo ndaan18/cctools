@@ -102,7 +102,7 @@ body {
   color: #fff;
 }
 
-/* Thin vertical rule between software and type groups */
+/* Thin vertical rule between groups */
 .filter-sep {
   display: inline-block;
   width: 1px;
@@ -111,6 +111,25 @@ body {
   margin: 0 0.2rem;
   align-self: center;
   flex-shrink: 0;
+}
+
+/* Status toggles: outlined when off, filled when on — same as other actives,
+   but use a small leading dot so they read as "include this" rather than
+   "filter to this". */
+.filter-btn[data-group="status"]::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+  transition: background var(--transition);
+}
+
+.filter-btn[data-group="status"].active::before {
+  background: currentColor;
 }
 
 /* ── Search ──────────────────────────────────────────────── */

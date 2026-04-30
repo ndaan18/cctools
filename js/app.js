@@ -57,9 +57,14 @@ const ICON_PLACEHOLDER = `<svg xmlns="http://www.w3.org/2000/svg" width="48" hei
 </svg>`;
 
 // ── Active filter state ───────────────────────────────────
-// Each group (software / type) holds at most one selected key.
-// Results = tools that match BOTH active filters (AND).
-const activeFilters = { software: null, type: null };
+// software / type : single-select (null = any), AND-ed together.
+// shownStatuses   : multi-select Set of statuses whose tools ARE shown.
+//                   Default: only "active". Toggling adds/removes from the set.
+const activeFilters = {
+  software:      null,
+  type:          null,
+  shownStatuses: new Set(["active"]),
+};
 
 function syncFilterButtons() {
   const bar = document.getElementById("filter-bar");
@@ -70,16 +75,21 @@ function syncFilterButtons() {
 
   bar.querySelectorAll(".filter-btn[data-group]").forEach(btn => {
     const key   = btn.dataset.filter;
-    const group = btn.dataset.group; // "software" | "type"
+    const group = btn.dataset.group;
 
-    // Active state
+    // ── Status: independent boolean toggles, always visible ───
+    if (group === "status") {
+      btn.classList.toggle("active", activeFilters.shownStatuses.has(key));
+      btn.hidden = false;
+      return;
+    }
+
+    // ── Software / Type: single-select with compatibility hiding ──
     btn.classList.toggle("active",
       key === activeFilters.software || key === activeFilters.type
     );
 
-    // A button is compatible if at least one tool carries this tag AND
-    // satisfies the other group's currently active filter.
-    const otherGroup = group === "software" ? "type" : "software";
+    const otherGroup  = group === "software" ? "type" : "software";
     const otherActive = activeFilters[otherGroup];
 
     const compatible = tools.some(t => {
@@ -88,7 +98,6 @@ function syncFilterButtons() {
       return true;
     });
 
-    // Always keep the currently selected button visible
     const isSelected = key === activeFilters[group];
     btn.hidden = !compatible && !isSelected;
 
@@ -98,11 +107,14 @@ function syncFilterButtons() {
     }
   });
 
-  // Hide the separator if one side has no visible buttons
-  const sep = bar.querySelector(".filter-sep");
-  if (sep) sep.hidden = visibleSoftware === 0 || visibleType === 0;
+  // Each separator knows which two groups it sits between via data-sep
+  bar.querySelectorAll(".filter-sep").forEach(sep => {
+    const [a, b] = (sep.dataset.sep || "").split("-");
+    const countOf = g => bar.querySelectorAll(`.filter-btn[data-group="${g}"]:not([hidden])`).length;
+    sep.hidden = countOf(a) === 0 || countOf(b) === 0;
+  });
 
-  // All button
+  // "All" button active when neither software nor type is selected
   const allBtn = bar.querySelector(".filter-btn[data-filter='all']");
   if (allBtn) allBtn.classList.toggle("active", noneActive);
 }
@@ -130,6 +142,7 @@ function buildFilters() {
     if (lastGroup !== null && tag.group !== lastGroup) {
       const sep = document.createElement("span");
       sep.className = "filter-sep";
+      sep.dataset.sep = `${lastGroup}-${tag.group}`;
       sep.setAttribute("aria-hidden", "true");
       bar.appendChild(sep);
     }
@@ -148,13 +161,21 @@ function buildFilters() {
     if (!btn) return;
 
     if (btn.dataset.filter === "all") {
-      // Reset both groups
       activeFilters.software = null;
-      activeFilters.type = null;
+      activeFilters.type     = null;
+      // Status resets to default (only active)
+      activeFilters.shownStatuses = new Set(["active"]);
+    } else if (btn.dataset.group === "status") {
+      // Boolean toggle: add if missing, remove if present
+      const key = btn.dataset.filter;
+      if (activeFilters.shownStatuses.has(key)) {
+        activeFilters.shownStatuses.delete(key);
+      } else {
+        activeFilters.shownStatuses.add(key);
+      }
     } else {
-      const group = btn.dataset.group; // "software" | "type"
+      const group = btn.dataset.group;
       const key   = btn.dataset.filter;
-      // Toggle: clicking the active one deselects it; clicking a new one selects it
       activeFilters[group] = activeFilters[group] === key ? null : key;
     }
 
@@ -244,6 +265,14 @@ function applyFilters() {
     filtered = filtered.filter(t => Array.isArray(t.tags) && t.tags.includes(activeFilters.software));
   if (activeFilters.type)
     filtered = filtered.filter(t => Array.isArray(t.tags) && t.tags.includes(activeFilters.type));
+
+  // Status: keep tools whose status tag is in the shown set.
+  // Tools with no status tag are always shown.
+  filtered = filtered.filter(t => {
+    const statusTags = (t.tags || []).filter(tag => TAG_DEFS[tag]?.group === "status");
+    if (statusTags.length === 0) return true;
+    return statusTags.some(s => activeFilters.shownStatuses.has(s));
+  });
 
   // Text search across name, description, and tag labels
   if (query) {
