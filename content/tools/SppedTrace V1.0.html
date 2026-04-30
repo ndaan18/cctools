@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpeedTrace — Pose to MGJSON</title>
+<style>
+:root {
+  --bg:        #F2F2F2;
+  --surface:   #FFFFFF;
+  --surface-2: #EBEBEB;
+  --border:    #E0E0E0;
+  --text:      #0A0A0A;
+  --muted:     #888888;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --transition: 140ms ease;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+/* ── App shell ───────────────────────────────────────── */
+.app {
+  width: 100%;
+  max-width: 1200px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* squircle corners applied via inline JS */
+}
+
+/* ── Header ──────────────────────────────────────────── */
+.app-header {
+  flex-shrink: 0;
+  padding: 1.125rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.app-title {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.app-subtitle {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.header-badge {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  border: 1.5px solid var(--border);
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* ── Main layout ─────────────────────────────────────── */
+.app-main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 272px;
+  overflow: hidden;
+}
+
+/* ── Left panel ──────────────────────────────────────── */
+.panel-left {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+}
+
+/* ── Dropzone ────────────────────────────────────────── */
+#dropzone {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.875rem;
+  margin: 1.125rem;
+  border: 1.5px dashed var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  padding: 2rem;
+  transition: border-color var(--transition), background var(--transition);
+  text-align: center;
+}
+
+#dropzone:hover, #dropzone.drag-over {
+  border-color: var(--text);
+  background: var(--surface-2);
+}
+
+.drop-icon {
+  width: 44px;
+  height: 44px;
+  border: 1.5px solid var(--border);
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: border-color var(--transition), color var(--transition);
+}
+
+#dropzone:hover .drop-icon, #dropzone.drag-over .drop-icon {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.drop-text strong {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin-bottom: 0.35rem;
+}
+
+.drop-text p {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+#file-input { display: none; }
+
+/* ── Video preview ───────────────────────────────────── */
+#preview-wrap { display: none; flex-direction: column; flex: 1; min-height: 0; }
+#preview-wrap.active { display: flex; }
+
+.video-box {
+  flex: 1;
+  background: #000;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+#source-video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  opacity: 0;
+}
+
+#overlay-canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* ── Progress ────────────────────────────────────────── */
+#progress-wrap {
+  display: none;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#progress-wrap.active { display: block; }
+
+.progress-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.45rem;
+}
+
+.progress-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.progress-pct {
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.progress-track {
+  height: 2px;
+  background: var(--surface-2);
+  border-radius: 99px;
+}
+
+#progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--text);
+  border-radius: 99px;
+  transition: width 0.08s linear;
+}
+
+/* ── Controls bar ────────────────────────────────────── */
+.controls {
+  flex-shrink: 0;
+  padding: 0.625rem 1.25rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot.idle    { background: var(--border); }
+.dot.loading { background: var(--muted); animation: blink 1.4s ease-in-out infinite; }
+.dot.running { background: var(--text);  animation: blink 0.8s ease-in-out infinite; }
+.dot.done    { background: var(--text); }
+.dot.error   { background: #D92B2B; }
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+#status-text {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Buttons ─────────────────────────────────────────── */
+.btn {
+  font-family: var(--font);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.45rem 0.875rem;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  transition: border-color var(--transition), color var(--transition), background var(--transition);
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.btn-primary {
+  background: var(--text);
+  border-color: var(--text);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #1a1a1a;
+  border-color: #1a1a1a;
+  color: #fff;
+}
+
+.btn-primary:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.btn-dl {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.btn-dl:hover:not(:disabled) {
+  background: var(--text);
+  color: #fff;
+}
+
+/* ── Right panel ─────────────────────────────────────── */
+.panel-right {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 0.875rem 1.125rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-header-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#stream-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.stream-row {
+  padding: 0.6rem 1.125rem;
+  border-bottom: 1px solid var(--surface-2);
+  opacity: 0.3;
+  transition: opacity 0.3s;
+}
+
+.stream-row.active { opacity: 1; }
+
+.stream-name {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 0.3rem;
+}
+
+.stream-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stream-track {
+  flex: 1;
+  height: 2px;
+  background: var(--surface-2);
+  border-radius: 99px;
+}
+
+.stream-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--text);
+  border-radius: 99px;
+  transition: width 0.06s linear;
+}
+
+.stream-row:nth-child(3n+2) .stream-fill { background: #555; }
+.stream-row:nth-child(3n+3) .stream-fill { background: #999; }
+
+.stream-val {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--muted);
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Panel footer ────────────────────────────────────── */
+.panel-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 0.875rem 1.125rem;
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.2rem 0;
+  border-bottom: 1px solid var(--surface-2);
+}
+
+.meta-row:last-of-type { border-bottom: none; }
+
+.meta-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.meta-val {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.how-it-works {
+  margin-top: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  background: var(--surface-2);
+  border-radius: 10px;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.how-it-works strong { color: var(--text); font-weight: 600; }
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 700px) {
+  body { padding: 0; }
+  .app-main { grid-template-columns: 1fr; }
+  .panel-right { border-top: 1px solid var(--border); max-height: 260px; }
+}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <div class="app-header">
+    <div>
+      <div class="app-title">SpeedTrace</div>
+      <div class="app-subtitle">Video pose extraction → MGJSON for After Effects</div>
+    </div>
+    <span class="header-badge">Scapino Ballet Rotterdam</span>
+  </div>
+
+  <div class="app-main">
+
+    <div class="panel-left">
+      <div id="dropzone">
+        <div class="drop-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="23 7 16 12 23 17 23 7"/>
+            <rect x="1" y="5" width="15" height="14" rx="2"/>
+          </svg>
+        </div>
+        <div class="drop-text">
+          <strong>Drop video here</strong>
+          <p>mp4 · mov · webm<br>Runs fully in-browser — nothing stored<br>Pose extraction → CSV → MGJSON</p>
+        </div>
+        <input type="file" id="file-input" accept="video/*">
+      </div>
+
+      <div id="preview-wrap">
+        <div class="video-box">
+          <video id="source-video" playsinline muted></video>
+          <canvas id="overlay-canvas"></canvas>
+        </div>
+      </div>
+
+      <div id="progress-wrap">
+        <div class="progress-row">
+          <span class="progress-label" id="progress-label-text">Initialising…</span>
+          <span class="progress-pct"   id="progress-pct">0%</span>
+        </div>
+        <div class="progress-track"><div id="progress-bar"></div></div>
+      </div>
+
+      <div class="controls">
+        <div class="status-pill">
+          <div class="dot loading" id="status-dot"></div>
+          <span id="status-text">Loading pose model…</span>
+        </div>
+        <button class="btn"             id="btn-reset"   style="display:none" onclick="resetTool()">Reset</button>
+        <button class="btn btn-primary" id="btn-process" disabled onclick="startProcessing()">Process</button>
+        <button class="btn btn-dl"      id="btn-mgjson"  style="display:none" onclick="downloadMGJSON()">↓ .mgjson</button>
+        <button class="btn btn-dl"      id="btn-csv"     style="display:none" onclick="downloadCSV()">↓ .csv</button>
+      </div>
+    </div>
+
+    <div class="panel-right">
+      <div class="panel-header"><div class="panel-header-title">Live Streams</div></div>
+      <div id="stream-list"></div>
+      <div class="panel-footer">
+        <div class="meta-row"><span class="meta-label">Frames</span>   <span class="meta-val" id="meta-frames">—</span></div>
+        <div class="meta-row"><span class="meta-label">Duration</span> <span class="meta-val" id="meta-duration">—</span></div>
+        <div class="meta-row"><span class="meta-label">FPS</span>      <span class="meta-val" id="meta-fps">—</span></div>
+        <div class="meta-row"><span class="meta-label">Streams</span>  <span class="meta-val" id="meta-streams">—</span></div>
+        <div class="how-it-works">
+          <strong>How it works</strong><br>
+          1. Extracts pose data frame by frame<br>
+          2. Builds a CSV from the movement data<br>
+          3. Converts it to .mgjson format<br>
+          4. Downloads the verified .mgjson<br><br>
+          In AE: <strong>File → Import → .mgjson</strong>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<video id="worker-video" style="display:none" playsinline muted></video>
+
+<!-- Squircle — inlined so the tool is self-contained -->
+<script>
+(function () {
+  function buildPath(w, h, r) {
+    var R = Math.min(r, w / 2, h / 2), c = R * 0.9;
+    return (
+      'M ' + R + ',0 H ' + (w - R) +
+      ' C ' + (w - R + c) + ',0 ' + w + ',' + (R - c) + ' ' + w + ',' + R +
+      ' V ' + (h - R) +
+      ' C ' + w + ',' + (h - R + c) + ' ' + (w - R + c) + ',' + h + ' ' + (w - R) + ',' + h +
+      ' H ' + R +
+      ' C ' + (R - c) + ',' + h + ' 0,' + (h - R + c) + ' 0,' + (h - R) +
+      ' V ' + R +
+      ' C 0,' + (R - c) + ' ' + (R - c) + ',0 ' + R + ',0 Z'
+    );
+  }
+  function applySquircle(el, r) {
+    r = r || 20;
+    function upd() {
+      var w = el.offsetWidth, h = el.offsetHeight;
+      if (w > 0 && h > 0) el.style.clipPath = "path('" + buildPath(w, h, r) + "')";
+    }
+    if (window.ResizeObserver) new ResizeObserver(upd).observe(el);
+    upd();
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    applySquircle(document.getElementById('app'), 24);
+  });
+}());
+</script>
+
+<!-- All original processing logic — unchanged -->
+<script type="module">
+import { PoseLandmarker, FilesetResolver }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+const STREAM_DEFS = [
+  { id: "Arm Extension",     min: 0,   max: 1   },
+  { id: "Arm Symmetry",      min: 0,   max: 1   },
+  { id: "Leg Extension",     min: 0,   max: 1   },
+  { id: "Right Leg Height",  min: 0,   max: 1   },
+  { id: "Wrist Height",      min: 0,   max: 1   },
+  { id: "Center X",          min: 0,   max: 1   },
+  { id: "Torso Lean deg",    min: -90, max: 90  },
+  { id: "Right Elbow Angle", min: 0,   max: 180 },
+  { id: "Left Elbow Angle",  min: 0,   max: 180 },
+  { id: "Right Knee Angle",  min: 0,   max: 180 },
+  { id: "Movement Speed",    min: 0,   max: 1   },
+];
+
+const LM = { LS:11,RS:12,LE:13,RE:14,LW:15,RW:16,LH:23,RH:24,LK:25,RK:26,LA:27,RA:28 };
+const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+const CONVERTER = "https://goprotelemetryextractor.com/csv-gpx-to-mgjson/";
+
+let poseLandmarker = null, videoFile = null, frameData = [], fps = 30;
+let csvContent = null, mgjsonBlob = null;
+
+const _ = id => document.getElementById(id);
+const dz=_('dropzone'),fi=_('file-input'),pw=_('preview-wrap'),
+      wv=_('worker-video'),cv=_('overlay-canvas'),cx=cv.getContext('2d'),
+      prw=_('progress-wrap'),pb=_('progress-bar'),pp=_('progress-pct'),
+      pl=_('progress-label-text'),sd=_('status-dot'),st=_('status-text'),
+      bP=_('btn-process'),bM=_('btn-mgjson'),bC=_('btn-csv'),bR=_('btn-reset'),
+      sl=_('stream-list');
+
+// ── Stream UI ──────────────────────────────────────────────────────
+function buildStreamUI() {
+  sl.innerHTML = '';
+  STREAM_DEFS.forEach(s => {
+    const r = document.createElement('div');
+    r.className='stream-row'; r.id='sr-'+s.id;
+    r.innerHTML=`<div class="stream-name">${s.id}</div>
+      <div class="stream-bar-row">
+        <div class="stream-track"><div class="stream-fill" id="sf-${s.id}"></div></div>
+        <div class="stream-val" id="sv-${s.id}">—</div>
+      </div>`;
+    sl.appendChild(r);
+  });
+  _('meta-streams').textContent = STREAM_DEFS.length;
+}
+buildStreamUI();
+
+function updateStreamUI(f) {
+  STREAM_DEFS.forEach(s => {
+    const v = f[s.id]; if (v == null) return;
+    const pct = Math.max(0, Math.min(100, ((v-s.min)/(s.max-s.min))*100));
+    _('sf-'+s.id).style.width = pct+'%';
+    _('sv-'+s.id).textContent = v.toFixed(3);
+    _('sr-'+s.id).classList.add('active');
+  });
+}
+
+// ── Pose maths ─────────────────────────────────────────────────────
+function angleDeg(a,v,b) {
+  const ax=a.x-v.x,ay=a.y-v.y,bx=b.x-v.x,by=b.y-v.y;
+  const mag=Math.sqrt(ax*ax+ay*ay)*Math.sqrt(bx*bx+by*by);
+  return mag<1e-6?0:Math.acos(Math.max(-1,Math.min(1,(ax*bx+ay*by)/mag)))*180/Math.PI;
+}
+
+function extractFeatures(lm) {
+  const f={};
+  const rE=angleDeg(lm[LM.RS],lm[LM.RE],lm[LM.RW]);
+  const lE=angleDeg(lm[LM.LS],lm[LM.LE],lm[LM.LW]);
+  const rK=angleDeg(lm[LM.RH],lm[LM.RK],lm[LM.RA]);
+  const lK=angleDeg(lm[LM.LH],lm[LM.LK],lm[LM.LA]);
+  f["Arm Extension"]    = ((rE/180)+(lE/180))/2;
+  f["Arm Symmetry"]     = 1-Math.abs(rE/180-lE/180);
+  f["Leg Extension"]    = (rK/180+lK/180)/2;
+  f["Right Leg Height"] = Math.max(0,Math.min(1,(lm[LM.RH].y-lm[LM.RA].y)+0.5));
+  f["Right Elbow Angle"]= rE; f["Left Elbow Angle"]=lE; f["Right Knee Angle"]=rK;
+  const sMx=(lm[LM.LS].x+lm[LM.RS].x)/2, sMy=(lm[LM.LS].y+lm[LM.RS].y)/2;
+  const hMx=(lm[LM.LH].x+lm[LM.RH].x)/2, hMy=(lm[LM.LH].y+lm[LM.RH].y)/2;
+  f["Torso Lean deg"] = Math.atan2(sMx-hMx,hMy-sMy)*180/Math.PI;
+  f["Center X"]       = (lm[LM.LH].x+lm[LM.RH].x+lm[LM.LS].x+lm[LM.RS].x)/4;
+  f["Wrist Height"]   = 1-(lm[LM.LW].y+lm[LM.RW].y)/2;
+  f["Movement Speed"] = 0;
+  return f;
+}
+
+function smooth(all, win=9) {
+  if (all.length<2) return all;
+  const keys=Object.keys(all[0].features);
+  const out=all.map(f=>({ms:f.ms,features:{...f.features}}));
+  const half=Math.floor(win/2);
+  keys.forEach(k=>{
+    for(let i=0;i<out.length;i++){
+      let s=0,c=0;
+      for(let j=Math.max(0,i-half);j<=Math.min(out.length-1,i+half);j++){s+=all[j].features[k]??0;c++;}
+      out[i].features[k]=s/c;
+    }
+  });
+  return out;
+}
+
+function addMovementSpeed(smoothed) {
+  if (smoothed.length < 2) return smoothed;
+  const speeds = [0];
+  for (let i=1; i<smoothed.length; i++) {
+    const dx = (smoothed[i].features["Center X"]||0)        - (smoothed[i-1].features["Center X"]||0);
+    const dy = (smoothed[i].features["Right Leg Height"]||0) - (smoothed[i-1].features["Right Leg Height"]||0);
+    const dw = (smoothed[i].features["Wrist Height"]||0)    - (smoothed[i-1].features["Wrist Height"]||0);
+    speeds.push(Math.sqrt(dx*dx+dy*dy+dw*dw));
+  }
+  const maxS = Math.max(...speeds, 1e-6);
+  smoothed.forEach((d,i)=>{ d.features["Movement Speed"]=speeds[i]/maxS; });
+  return smoothed;
+}
+
+// ── MGJSON builder ─────────────────────────────────────────────────
+const LARGEST = 2147483648.0;
+
+function validVal(v) {
+  if (isNaN(v)||!isFinite(v)) return 0;
+  return Math.max(Math.min(v,LARGEST),-LARGEST);
+}
+
+function sidesOf(n) {
+  const s = Math.abs(n).toString().split('.');
+  return [s[0], s[1]||'0'];
+}
+
+function paddedVal(v, digInt, digDec) {
+  const sign = v>=0?'+':'-';
+  const fixed = Math.abs(v).toFixed(digDec);
+  const parts = fixed.split('.');
+  return sign + parts[0].padStart(digInt,'0') + '.' + parts[1];
+}
+
+function buildMGJSON(data, fps) {
+  const BASE = new Date('2020-01-01T00:00:00.000Z').getTime();
+  const dataOutline=[], dataDynamicSamples=[];
+
+  STREAM_DEFS.forEach((def,idx) => {
+    const raw = data.map(d => validVal(d.features[def.id]??0));
+    let mn=LARGEST, mx=-LARGEST, digInt=0, digDec=0;
+    raw.forEach(v => {
+      mn=Math.min(mn,v); mx=Math.max(mx,v);
+      const [ip,dp] = sidesOf(v);
+      digInt=Math.max(digInt,ip.length);
+      digDec=Math.max(digDec,dp.length);
+    });
+    digDec = Math.min(digDec, 4);
+    const sName = `Stream${idx}`;
+    dataOutline.push({
+      objectType:"dataDynamic", displayName:def.id, sampleSetID:sName,
+      dataType:{
+        type:"numberString",
+        numberStringProperties:{
+          pattern:{digitsInteger:digInt,digitsDecimal:digDec,isSigned:true},
+          range:{occuring:{min:mn,max:mx},legal:{min:mn,max:mx}}
+        },
+        paddedStringProperties:{maxLen:0,maxDigitsInStrLength:0,eventMarkerB:false}
+      },
+      interpolation:"linear", hasExpectedFrequecyB:false,
+      sampleCount:raw.length, matchName:sName
+    });
+    dataDynamicSamples.push({
+      sampleSetID:sName,
+      samples:raw.map((v,i)=>({
+        time: new Date(BASE+data[i].ms).toISOString(),
+        value: paddedVal(v,digInt,digDec)
+      }))
+    });
+  });
+  return {
+    version:"MGJSON2.0.0", creator:"SpeedTrace",
+    dynamicSamplesPresentB:true,
+    dynamicDataInfo:{useTimecodeB:false,utcInfo:{precisionLength:3,isGMT:true}},
+    dataOutline, dataDynamicSamples
+  };
+}
+
+// ── CSV builder ────────────────────────────────────────────────────
+function buildCSV(smoothed) {
+  const cols=STREAM_DEFS.map(s=>s.id);
+  const header=['milliseconds',...cols].join(',');
+  const rows=smoothed.map(d=>{
+    const vals=cols.map(k=>{const v=d.features[k]??0;return(isNaN(v)||!isFinite(v))?'0.0000':v.toFixed(4);});
+    return [d.ms,...vals].join(',');
+  });
+  return [header,...rows].join('\n');
+}
+
+// ── Converter API ──────────────────────────────────────────────────
+async function convertViaAPI(csvText, filename) {
+  const blob = new Blob([csvText],{type:'text/csv'});
+  const form = new FormData();
+  form.append('file', blob, filename+'.csv');
+  const urls = [
+    CONVERTER,
+    'https://corsproxy.io/?url='+encodeURIComponent(CONVERTER)
+  ];
+  for (const url of urls) {
+    try {
+      const res=await fetch(url,{method:'POST',body:form});
+      if (!res.ok) continue;
+      const buf=await res.arrayBuffer();
+      const text=new TextDecoder().decode(buf);
+      if (text.includes('MGJSON2.0.0')) return new Blob([buf],{type:'application/json'});
+    } catch(e){}
+  }
+  return null;
+}
+
+// ── Draw skeleton ──────────────────────────────────────────────────
+function drawSkeleton(lm,w,h) {
+  cx.clearRect(0,0,w,h); cx.drawImage(wv,0,0,w,h);
+  cx.fillStyle='rgba(10,10,10,0.45)'; cx.fillRect(0,0,w,h);
+  cx.strokeStyle='rgba(255,255,255,0.85)'; cx.lineWidth=4; cx.lineCap='round';
+  BONES.forEach(([a,b])=>{
+    if(!lm[a]||!lm[b])return;
+    cx.beginPath();cx.moveTo(lm[a].x*w,lm[a].y*h);cx.lineTo(lm[b].x*w,lm[b].y*h);cx.stroke();
+  });
+  Object.values(LM).forEach(i=>{
+    if(!lm[i])return;
+    cx.beginPath();cx.arc(lm[i].x*w,lm[i].y*h,6,0,Math.PI*2);
+    cx.fillStyle='#FFFFFF';cx.fill();
+  });
+}
+
+// ── File handling ──────────────────────────────────────────────────
+dz.addEventListener('click',()=>fi.click());
+fi.addEventListener('change',e=>e.target.files[0]&&loadVideo(e.target.files[0]));
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
+dz.addEventListener('drop',e=>{
+  e.preventDefault();dz.classList.remove('drag-over');
+  const f=e.dataTransfer.files[0];
+  if(f&&f.type.startsWith('video/'))loadVideo(f);
+});
+
+function loadVideo(file) {
+  videoFile=file; wv.src=URL.createObjectURL(file);
+  wv.addEventListener('loadedmetadata',()=>{
+    fps=wv.frameRate||30;
+    cv.width=wv.videoWidth||640; cv.height=wv.videoHeight||360;
+    wv.currentTime=0;
+    wv.addEventListener('seeked',()=>cx.drawImage(wv,0,0,cv.width,cv.height),{once:true});
+    dz.style.display='none'; pw.classList.add('active');
+    setStatus('idle',`${file.name} — ${wv.duration.toFixed(1)}s`);
+    bP.disabled=false; bR.style.display='';
+    _('meta-fps').textContent=fps.toFixed(2);
+    _('meta-duration').textContent=wv.duration.toFixed(2)+'s';
+  },{once:true});
+}
+
+// ── Processing ─────────────────────────────────────────────────────
+window.startProcessing = async function() {
+  if (!poseLandmarker||!videoFile) return;
+  frameData=[]; csvContent=null; mgjsonBlob=null;
+  bP.disabled=true; bM.style.display='none'; bC.style.display='none';
+  prw.classList.add('active');
+  setStatus('running','Extracting pose data…');
+
+  const dur=wv.duration, step=1/fps;
+  let t=0, last=null;
+
+  while(t<=dur) {
+    await new Promise(r=>{wv.currentTime=t;wv.addEventListener('seeked',r,{once:true});});
+    const res=poseLandmarker.detectForVideo(wv,t*1000);
+    let feats;
+    if(res.landmarks?.length>0){
+      feats=extractFeatures(res.landmarks[0]); last={...feats};
+      drawSkeleton(res.landmarks[0],cv.width,cv.height);
+    } else {
+      feats=last?{...last}:Object.fromEntries(STREAM_DEFS.map(s=>[s.id,0]));
+    }
+    frameData.push({ms:Math.round(t*1000),features:feats});
+    updateStreamUI(feats);
+    const pct=Math.round((t/dur)*100);
+    pb.style.width=pct+'%'; pp.textContent=pct+'%';
+    pl.textContent=`Extracting frame ${frameData.length}`;
+    _('meta-frames').textContent=frameData.length;
+    t+=step;
+    if(frameData.length%5===0) await new Promise(r=>setTimeout(r,0));
+  }
+
+  setStatus('running','Processing data…');
+  pl.textContent='Smoothing & computing speed…';
+  pb.style.width='90%'; pp.textContent='90%';
+  await new Promise(r=>setTimeout(r,50));
+
+  const smoothed = addMovementSpeed(smooth(frameData,9));
+  const baseName = videoFile.name.replace(/\.[^.]+$/,'');
+
+  csvContent = buildCSV(smoothed);
+  bC.style.display='';
+
+  setStatus('running','Building MGJSON…');
+  pl.textContent='Building MGJSON…';
+  pb.style.width='94%'; pp.textContent='94%';
+  await new Promise(r=>setTimeout(r,50));
+
+  mgjsonBlob = new Blob([JSON.stringify(buildMGJSON(smoothed,fps))],{type:'application/json'});
+  bM.style.display='';
+  pb.style.width='100%'; pp.textContent='100%';
+  pl.textContent=`Done — ${frameData.length} frames`;
+  setStatus('done',`Done — ${frameData.length} frames`);
+};
+
+// ── Save with native OS file picker ───────────────────────────────
+async function saveFile(blob, suggestedName, mimeType, ext, description) {
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName,
+        types: [{ description, accept: { [mimeType]: [ext] } }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch(e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: suggestedName
+  });
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+window.downloadMGJSON = function() {
+  if (!mgjsonBlob) return;
+  const name = videoFile.name.replace(/\.[^.]+$/, '') + '.mgjson';
+  saveFile(mgjsonBlob, name, 'application/json', '.mgjson', 'MGJSON file for After Effects');
+};
+
+window.downloadCSV = function() {
+  if (!csvContent) return;
+  const name = videoFile.name.replace(/\.[^.]+$/, '') + '.csv';
+  saveFile(new Blob([csvContent], {type:'text/csv'}), name, 'text/csv', '.csv', 'CSV pose data');
+};
+
+// ── Reset ──────────────────────────────────────────────────────────
+window.resetTool = function() {
+  videoFile=null; frameData=[]; csvContent=null; mgjsonBlob=null;
+  wv.src=''; dz.style.display=''; pw.classList.remove('active');
+  prw.classList.remove('active'); pb.style.width='0%';
+  bP.disabled=true; bM.style.display='none'; bC.style.display='none'; bR.style.display='none';
+  setStatus('idle','Ready — drop a video'); buildStreamUI();
+  ['meta-frames','meta-duration','meta-fps'].forEach(id=>_(id).textContent='—');
+};
+
+function setStatus(s,msg){ sd.className='dot '+s; st.textContent=msg; }
+
+// ── Boot ───────────────────────────────────────────────────────────
+(async()=>{
+  setStatus('loading','Loading pose model…');
+  try {
+    const vision=await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+    poseLandmarker=await PoseLandmarker.createFromOptions(vision,{
+      baseOptions:{
+        modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+        delegate:"GPU"
+      },
+      runningMode:"VIDEO", numPoses:1,
+      minPoseDetectionConfidence:0.5,
+      minPosePresenceConfidence:0.5,
+      minTrackingConfidence:0.5
+    });
+    setStatus('idle','Ready — drop a video');
+  } catch(e){ setStatus('error','Model failed to load'); console.error(e); }
+})();
+</script>
+</body>
+</html>
