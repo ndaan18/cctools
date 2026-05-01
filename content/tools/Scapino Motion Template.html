@@ -684,6 +684,35 @@ input[type="color"].tmpl-swatch {
 }
 .p-bg[data-empty] + .p-placeholder { display: flex; }
 .p-placeholder > svg { width: 10%; height: auto; min-width: 28px; }
+/* ── Motion scrubber ──────────────────────────────────── */
+.scatter-row { display: flex; gap: 0.5rem; margin-top: 0.625rem; }
+#scatter-scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  border-radius: 99px;
+  outline: none;
+  cursor: pointer;
+  margin: 0.5rem 0 0;
+}
+#scatter-scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--text);
+  cursor: pointer;
+}
+#scatter-scrubber::-moz-range-thumb {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--text);
+  border: none;
+  cursor: pointer;
+}
+
+/* ── Upload slots ─────────────────────────────────────── */
 .upload-slot {
   display: flex;
   align-items: center;
@@ -904,6 +933,25 @@ input[type="color"].tmpl-swatch {
             <button class="slot-remove" onclick="event.stopPropagation();tmplRemoveBg('circle')">✕</button>
           </div>
           <input type="file" id="up-circle-bg" style="display:none" accept="image/*" onchange="tmplLoadCircleBg(this)">
+        </div>
+      </div>
+      <div class="tmpl-section">
+        <div class="tmpl-section-title">Motion Preview</div>
+        <div class="tmpl-field">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
+            <label class="tmpl-label">Scatter distance</label>
+            <span class="tmpl-label" id="scatter-dist-val">50%</span>
+          </div>
+          <input type="range" id="scatter-dist" min="0" max="100" value="50" step="1"
+            oninput="document.getElementById('scatter-dist-val').textContent=this.value+'%'">
+        </div>
+        <div class="tmpl-field">
+          <label class="tmpl-label" style="margin-bottom:0.3rem;display:block">Timeline</label>
+          <input type="range" id="scatter-scrubber" min="0" max="100" value="0" step="0.5" oninput="scatterScrub(this.value)">
+          <div class="scatter-row">
+            <button class="btn" id="btn-scatter-play" data-state="idle" onclick="scatterPlay()" style="flex:1">▶ Play</button>
+            <button class="btn" onclick="scatterReset()">Reset</button>
+          </div>
         </div>
       </div>
       <div class="panel-footer">
@@ -1339,6 +1387,183 @@ window.switchTab = function(tab) {
   st.style.display = tab==='speedtrace' ? '' : 'none';
   tt.style.display = tab==='template' ? 'grid' : 'none';
   if (tab==='template') setTimeout(updatePosterSizing, 30);
+};
+
+// ── p-info scatter preview ───────────────────────────────
+let _scatter    = null;
+let _scatterRAF = null;
+
+function _scatterInit() {
+  if (_scatter) {
+    _scatter.originals.forEach(({ col, html }) => {
+      col.innerHTML = html;
+      col.setAttribute('contenteditable', 'true');
+    });
+  }
+
+  const cols = [...document.querySelectorAll('#poster .p-col')];
+  const originals = [], chars = [];
+
+  // 1. Wrap each text character in a bare span (no transform yet)
+  cols.forEach(col => {
+    originals.push({ col, html: col.innerHTML });
+    col.setAttribute('contenteditable', 'false');
+    col.innerHTML = col.innerHTML.replace(/(<[^>]*>)|([^<])/g, (_, tag, ch) => {
+      if (tag) return tag;
+      return `<span style="display:inline-block">${ch}</span>`;
+    });
+    col.querySelectorAll('span').forEach(el => chars.push({ el, dx: 0, dy: 0 }));
+  });
+
+  // 2. Measure rects in element space (divide by poster scale so translate() values match)
+  const posterEl   = document.getElementById('poster');
+  const posterRect = posterEl.getBoundingClientRect();
+  const S          = posterRect.width / _posterW; // viewport px → element px
+
+  const rects = chars.map(c => {
+    const r = c.el.getBoundingClientRect();
+    return {
+      x: (r.left - posterRect.left) / S,
+      y: (r.top  - posterRect.top)  / S,
+      w: r.width  / S,
+      h: r.height / S,
+    };
+  });
+
+  // 3. Assign random initial scatter offsets
+  const fs      = parseFloat(getComputedStyle(cols[0]).fontSize) || 33;
+  const distPct = parseFloat(document.getElementById('scatter-dist').value) / 100;
+  const maxD    = fs * distPct * 2; // slider 0–100 → 0×–2× font-size
+  chars.forEach(c => {
+    c.dx = (Math.random() * 2 - 1) * maxD;
+    c.dy = (Math.random() * 2 - 1) * maxD * 0.7;
+  });
+
+  // 4. Collision resolution — push overlapping pairs apart until 0 overlap
+  const GAP = 1; // minimum px clearance between any two glyphs
+  for (let iter = 0; iter < 200; iter++) {
+    let anyMoved = false;
+    for (let i = 0; i < chars.length; i++) {
+      for (let j = i + 1; j < chars.length; j++) {
+        const ri = rects[i], rj = rects[j];
+        const ci = chars[i], cj = chars[j];
+        const ix = ri.x + ci.dx, iy = ri.y + ci.dy;
+        const jx = rj.x + cj.dx, jy = rj.y + cj.dy;
+        const ox = Math.min(ix + ri.w, jx + rj.w) - Math.max(ix, jx);
+        const oy = Math.min(iy + ri.h, jy + rj.h) - Math.max(iy, jy);
+        if (ox > 0 && oy > 0) {
+          anyMoved = true;
+          // Resolve along the axis with less overlap (minimum separation vector)
+          if (ox <= oy) {
+            const push = (ox + GAP) / 2;
+            if (ix < jx) { ci.dx -= push; cj.dx += push; }
+            else          { ci.dx += push; cj.dx -= push; }
+          } else {
+            const push = (oy + GAP) / 2;
+            if (iy < jy) { ci.dy -= push; cj.dy += push; }
+            else          { ci.dy += push; cj.dy -= push; }
+          }
+        }
+      }
+    }
+    if (!anyMoved) break;
+  }
+
+  // 5. Apply resolved scatter transforms
+  chars.forEach(c => {
+    c.el.style.transform = `translate(${c.dx.toFixed(1)}px,${c.dy.toFixed(1)}px)`;
+  });
+
+  _scatter = { spans: chars, originals };
+}
+
+// Timeline: 500 ms hold at scattered → 500 ms ease to settled
+const SCATTER_HOLD_MS = 500;
+const SCATTER_ANIM_MS = 500;
+const SCATTER_TOTAL_MS = SCATTER_HOLD_MS + SCATTER_ANIM_MS;
+
+// Quintic ease-in-out — maximum easing without overshoot
+function _scatterEase(t) {
+  return t < 0.5 ? 16 * t ** 5 : 1 - Math.pow(-2 * t + 2, 5) / 2;
+}
+
+// Apply animation position t ∈ [0,1] to character spans
+function _scatterApplyT(t) {
+  _scatter.spans.forEach(({ el, dx, dy }) => {
+    el.style.transform = `translate(${(dx*(1-t)).toFixed(2)}px,${(dy*(1-t)).toFixed(2)}px)`;
+  });
+}
+
+// Map scrubber value [0,100] → animation t through hold + ease
+// Scrubber 0–50 = hold period (scattered), 50–100 = eased animation
+function _scrubToT(val) {
+  const animProgress = Math.max(0, Math.min((val / 100 - 0.5) / 0.5, 1));
+  return _scatterEase(animProgress);
+}
+
+function _scatterBtn(label, state) {
+  const b = document.getElementById('btn-scatter-play');
+  if (!b) return;
+  b.textContent = label;
+  b.dataset.state = state;
+}
+
+window.scatterPlay = function() {
+  const scrubber = document.getElementById('scatter-scrubber');
+  const b        = document.getElementById('btn-scatter-play');
+  const state    = b.dataset.state || 'idle';
+
+  if (state === 'playing') {
+    cancelAnimationFrame(_scatterRAF); _scatterRAF = null;
+    const val = parseFloat(scrubber.value);
+    _scatterBtn(val >= 100 ? '↺ Replay' : '▶ Play', val >= 100 ? 'done' : 'paused');
+    return;
+  }
+
+  const isNew = (!_scatter || state === 'done');
+  if (isNew) { _scatterInit(); _scatterApplyT(0); scrubber.value = 0; }
+
+  _scatterBtn('◼ Stop', 'playing');
+
+  // Fake start time so playback resumes from current scrubber position
+  const startVal = parseFloat(scrubber.value);
+  const t0 = performance.now() - (startVal / 100) * SCATTER_TOTAL_MS;
+
+  function tick(now) {
+    const elapsed      = now - t0;
+    const scrubProgress = Math.min(elapsed / SCATTER_TOTAL_MS, 1);
+    const animProgress  = Math.max(0, Math.min((elapsed - SCATTER_HOLD_MS) / SCATTER_ANIM_MS, 1));
+    _scatterApplyT(_scatterEase(animProgress));
+    scrubber.value = scrubProgress * 100;
+    if (scrubProgress < 1) {
+      _scatterRAF = requestAnimationFrame(tick);
+    } else {
+      _scatterRAF = null;
+      _scatterBtn('↺ Replay', 'done');
+    }
+  }
+  _scatterRAF = requestAnimationFrame(tick);
+};
+
+window.scatterScrub = function(val) {
+  if (_scatterRAF) { cancelAnimationFrame(_scatterRAF); _scatterRAF = null; }
+  if (!_scatter) _scatterInit();
+  _scatterApplyT(_scrubToT(val));
+  _scatterBtn(+val >= 100 ? '↺ Replay' : '▶ Play', +val >= 100 ? 'done' : 'paused');
+};
+
+window.scatterReset = function() {
+  if (_scatterRAF) { cancelAnimationFrame(_scatterRAF); _scatterRAF = null; }
+  if (_scatter) {
+    _scatter.originals.forEach(({ col, html }) => {
+      col.innerHTML = html;
+      col.setAttribute('contenteditable', 'true');
+    });
+    _scatter = null;
+  }
+  const scrubber = document.getElementById('scatter-scrubber');
+  if (scrubber) scrubber.value = 0;
+  _scatterBtn('▶ Play', 'idle');
 };
 
 // ── Poster sizing ────────────────────────────────────────
