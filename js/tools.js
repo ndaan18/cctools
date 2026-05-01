@@ -12,11 +12,11 @@
 
 const tools = [
   {
-    name: "SpeedTrace",
+    name: "Scapino Motion Template",
     description: "Drop a video and extract pose data frame by frame using MediaPipe. Outputs an .mgjson file you can import directly into After Effects, plus a raw .csv. Runs fully in-browser — nothing is uploaded.",
-    tags: ["html", "tool", "active"],
+    tags: ["html", "tool", "work-in-progress"],
     action: "link",
-    url: "content/tools/SpeedTrace.html",
+    url: "content/tools/Scapino Motion Template.html",
   },
   {
     name: "SpeedTrace V1.0",

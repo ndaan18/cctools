@@ -445,6 +445,226 @@ body {
   .app-main { grid-template-columns: 1fr; }
   .panel-right { border-top: 1px solid var(--border); max-height: 260px; }
 }
+
+/* ── Tabs ─────────────────────────────────────────────── */
+.tab-bar {
+  flex-shrink: 0;
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 1.25rem;
+}
+.tab-btn {
+  font-family: var(--font);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.55rem 0.875rem;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--transition), border-color var(--transition);
+}
+.tab-btn.active { color: var(--text); border-bottom-color: var(--text); }
+
+/* ── Template tab ─────────────────────────────────────── */
+#tab-template {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  grid-template-columns: 1fr 272px;
+}
+.tmpl-preview {
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 1.5rem;
+  gap: 0.75rem;
+  border-right: 1px solid var(--border);
+}
+.tmpl-hint {
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* ── Poster ───────────────────────────────────────────── */
+#poster-wrap { position: relative; flex-shrink: 0; }
+#poster {
+  transform-origin: top left;
+  background: #fbff2d;
+  font-family: 'NN Nouvelle Grotesk Trial', 'NN Nouvelle Grotesk', 'Neue Haas Grotesk Display', 'Helvetica Neue', Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  /* width, height, and all --vars set by updatePosterSizing() */
+}
+.p-top {
+  width: 100%;
+  height: var(--top-h, 540px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--margin, 54px);
+  padding: var(--margin, 54px);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.p-circle {
+  width: var(--circle-size, 1080px);
+  height: var(--circle-size, 1080px);
+  border-radius: 9999px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--margin, 54px);
+  flex-shrink: 0;
+}
+.p-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+.p-logo {
+  width: 100%;
+  height: auto;
+  flex-shrink: 0;
+  display: block;
+  position: relative;
+  z-index: 1;
+}
+.p-title {
+  font-size: var(--title-size, 52px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 0.94;
+  text-transform: uppercase;
+  text-align: center;
+  color: #fcff2d;
+  position: relative;
+  z-index: 1;
+  outline: none;
+  cursor: text;
+  flex-shrink: 0;
+}
+.p-title:focus, .p-col:focus {
+  outline: 2px solid rgba(255,255,255,0.45);
+  outline-offset: 6px;
+  border-radius: 2px;
+}
+.p-info {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  position: relative;
+  z-index: 1;
+  gap: var(--margin, 54px);
+}
+.p-col {
+  font-size: var(--info-size, 33px);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 0.94;
+  text-transform: uppercase;
+  color: #fcff2d;
+  outline: none;
+  flex: 1;
+  cursor: text;
+}
+.p-col:nth-child(2) { text-align: center; }
+.p-col:nth-child(3) { text-align: right; }
+
+/* ── Template edit panel ──────────────────────────────── */
+.tmpl-edit {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.tmpl-section {
+  padding: 0.875rem 1.125rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.tmpl-section-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.625rem;
+}
+.tmpl-field { margin-bottom: 0.5rem; }
+.tmpl-field:last-child { margin-bottom: 0; }
+.tmpl-label {
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 0.25rem;
+}
+.tmpl-color-row { display: flex; align-items: center; gap: 0.5rem; }
+input[type="color"].tmpl-swatch {
+  width: 28px; height: 28px;
+  padding: 2px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  flex-shrink: 0;
+}
+.tmpl-hex {
+  flex: 1;
+  font-family: var(--font);
+  font-size: 0.75rem;
+  padding: 0.35rem 0.5rem;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  outline: none;
+  transition: border-color var(--transition);
+}
+.tmpl-hex:focus { border-color: var(--text); }
+.tmpl-upload {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  font-family: var(--font);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+  border: 1.5px dashed var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+  transition: border-color var(--transition), color var(--transition);
+}
+.tmpl-upload:hover { border-color: var(--text); color: var(--text); }
 </style>
 </head>
 <body>
@@ -453,13 +673,17 @@ body {
 
   <div class="app-header">
     <div>
-      <div class="app-title">SpeedTrace</div>
-      <div class="app-subtitle">Video pose extraction → MGJSON for After Effects</div>
+      <div class="app-title">Scapino Motion Template</div>
     </div>
     <span class="header-badge">Scapino Ballet Rotterdam</span>
   </div>
 
-  <div class="app-main">
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tbtn-speedtrace" onclick="switchTab('speedtrace')">SpeedTrace</button>
+    <button class="tab-btn" id="tbtn-template" onclick="switchTab('template')">Template</button>
+  </div>
+
+  <div class="app-main" id="tab-speedtrace">
 
     <div class="panel-left">
       <div id="dropzone">
@@ -524,6 +748,78 @@ body {
     </div>
 
   </div>
+
+  <div id="tab-template" style="display:none">
+    <div class="tmpl-preview">
+      <span class="tmpl-hint">Click text to edit directly on the poster</span>
+      <div id="poster-wrap">
+        <div id="poster">
+          <div class="p-top">
+            <img class="p-bg" id="p-photo-top" src="https://www.figma.com/api/mcp/asset/a52235f7-95a2-485b-8bfa-9e4aecd48465" alt="">
+            <img class="p-logo" id="p-logo-img" src="https://www.figma.com/api/mcp/asset/6c16e1fb-8115-4d33-947c-65446baac1f5" alt="">
+            <div class="p-title" contenteditable spellcheck="false">Ballet<br>Rotterdam</div>
+          </div>
+          <div class="p-circle">
+            <img class="p-bg" id="p-photo-circle" src="https://www.figma.com/api/mcp/asset/a52235f7-95a2-485b-8bfa-9e4aecd48465" alt="">
+            <div class="p-info">
+              <div class="p-col" contenteditable spellcheck="false">Origin: The Future<br>is Feminine</div>
+              <div class="p-col" contenteditable spellcheck="false">17 01 26<br>19 03 26</div>
+              <div class="p-col" contenteditable spellcheck="false">Katoenhuis<br>Rotterdam</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tmpl-edit">
+      <div class="panel-header"><div class="panel-header-title">Design</div></div>
+      <div class="tmpl-section">
+        <div class="tmpl-section-title">Colors</div>
+        <div class="tmpl-field">
+          <label class="tmpl-label">Background</label>
+          <div class="tmpl-color-row">
+            <input type="color" class="tmpl-swatch" id="c-bg" value="#fbff2d" oninput="tmplApplyColors()">
+            <input type="text" class="tmpl-hex" id="c-bg-hex" value="#fbff2d" maxlength="7" oninput="tmplSyncHex('bg')">
+          </div>
+        </div>
+        <div class="tmpl-field">
+          <label class="tmpl-label">Text</label>
+          <div class="tmpl-color-row">
+            <input type="color" class="tmpl-swatch" id="c-text" value="#fcff2d" oninput="tmplApplyColors()">
+            <input type="text" class="tmpl-hex" id="c-text-hex" value="#fcff2d" maxlength="7" oninput="tmplSyncHex('text')">
+          </div>
+        </div>
+      </div>
+      <div class="tmpl-section">
+        <div class="tmpl-section-title">Canvas</div>
+        <div class="tmpl-field">
+          <label class="tmpl-label">Width × Height (px)</label>
+          <div class="tmpl-color-row">
+            <input type="number" class="tmpl-hex" id="inp-w" value="1080" min="100" max="8000" style="text-align:center" oninput="updatePosterSizing()">
+            <span style="color:var(--muted);font-size:0.75rem;flex-shrink:0">×</span>
+            <input type="number" class="tmpl-hex" id="inp-h" value="1620" min="100" max="8000" style="text-align:center" oninput="updatePosterSizing()">
+          </div>
+        </div>
+      </div>
+      <div class="tmpl-section">
+        <div class="tmpl-section-title">Images</div>
+        <div class="tmpl-field">
+          <label class="tmpl-label">Top background</label>
+          <button class="tmpl-upload" onclick="document.getElementById('up-top-bg').click()">↑ Upload photo</button>
+          <input type="file" id="up-top-bg" style="display:none" accept="image/*" onchange="tmplLoadTopBg(this)">
+        </div>
+        <div class="tmpl-field">
+          <label class="tmpl-label">Circle background</label>
+          <button class="tmpl-upload" onclick="document.getElementById('up-circle-bg').click()">↑ Upload photo</button>
+          <input type="file" id="up-circle-bg" style="display:none" accept="image/*" onchange="tmplLoadCircleBg(this)">
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button class="btn btn-dl" style="width:100%" onclick="downloadPosterPNG()">↓ Download PNG</button>
+        <div style="margin-top:0.5rem;font-size:0.625rem;color:var(--muted);line-height:1.6">Upload local images for<br>best export quality.</div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <video id="worker-video" style="display:none" playsinline muted></video>
@@ -565,17 +861,7 @@ import { PoseLandmarker, FilesetResolver }
   from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
 
 const STREAM_DEFS = [
-  { id: "Arm Extension",     min: 0,   max: 1   },
-  { id: "Arm Symmetry",      min: 0,   max: 1   },
-  { id: "Leg Extension",     min: 0,   max: 1   },
-  { id: "Right Leg Height",  min: 0,   max: 1   },
-  { id: "Wrist Height",      min: 0,   max: 1   },
-  { id: "Center X",          min: 0,   max: 1   },
-  { id: "Torso Lean deg",    min: -90, max: 90  },
-  { id: "Right Elbow Angle", min: 0,   max: 180 },
-  { id: "Left Elbow Angle",  min: 0,   max: 180 },
-  { id: "Right Knee Angle",  min: 0,   max: 180 },
-  { id: "Movement Speed",    min: 0,   max: 1   },
+  { id: "Movement Speed", min: 0, max: 1 },
 ];
 
 const LM = { LS:11,RS:12,LE:13,RE:14,LW:15,RW:16,LH:23,RH:24,LK:25,RK:26,LA:27,RA:28 };
@@ -823,7 +1109,7 @@ window.startProcessing = async function() {
   setStatus('running','Extracting pose data…');
 
   const dur=wv.duration, step=1/fps;
-  let t=0, last=null;
+  let t=0, last=null, prevFeats=null, maxRawSpeed=1e-6;
 
   while(t<=dur) {
     await new Promise(r=>{wv.currentTime=t;wv.addEventListener('seeked',r,{once:true});});
@@ -833,8 +1119,17 @@ window.startProcessing = async function() {
       feats=extractFeatures(res.landmarks[0]); last={...feats};
       drawSkeleton(res.landmarks[0],cv.width,cv.height);
     } else {
-      feats=last?{...last}:Object.fromEntries(STREAM_DEFS.map(s=>[s.id,0]));
+      feats=last?{...last}:{"Movement Speed":0,"Center X":0,"Right Leg Height":0,"Wrist Height":0};
     }
+    if (prevFeats) {
+      const dx=(feats["Center X"]||0)-(prevFeats["Center X"]||0);
+      const dy=(feats["Right Leg Height"]||0)-(prevFeats["Right Leg Height"]||0);
+      const dw=(feats["Wrist Height"]||0)-(prevFeats["Wrist Height"]||0);
+      const rawSpeed=Math.sqrt(dx*dx+dy*dy+dw*dw);
+      maxRawSpeed=Math.max(maxRawSpeed,rawSpeed);
+      feats["Movement Speed"]=rawSpeed/maxRawSpeed;
+    }
+    prevFeats={...feats};
     frameData.push({ms:Math.round(t*1000),features:feats});
     updateStreamUI(feats);
     const pct=Math.round((t/dur)*100);
@@ -935,6 +1230,124 @@ function setStatus(s,msg){ sd.className='dot '+s; st.textContent=msg; }
     setStatus('idle','Ready — drop a video');
   } catch(e){ setStatus('error','Model failed to load'); console.error(e); }
 })();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+let _posterW = 1080, _posterH = 1620;
+
+// ── Tab switching ────────────────────────────────────────
+window.switchTab = function(tab) {
+  ['speedtrace','template'].forEach(t => {
+    document.getElementById('tbtn-'+t).classList.toggle('active', t===tab);
+  });
+  const st = document.getElementById('tab-speedtrace');
+  const tt = document.getElementById('tab-template');
+  st.style.display = tab==='speedtrace' ? '' : 'none';
+  tt.style.display = tab==='template' ? 'grid' : 'none';
+  if (tab==='template') setTimeout(updatePosterSizing, 30);
+};
+
+// ── Poster sizing ────────────────────────────────────────
+window.updatePosterSizing = function() {
+  const pw = Math.max(100, parseInt(document.getElementById('inp-w').value) || 1080);
+  const ph = Math.max(100, parseInt(document.getElementById('inp-h').value) || 1620);
+  _posterW = pw; _posterH = ph;
+  const ss     = Math.min(pw, ph);       // shortest side
+  const margin = ss * 0.05;              // 5% of shortest side
+  const csz    = ss;                     // circle = shortest side square
+  const topH   = Math.max(0, ph - csz);
+
+  const poster = document.getElementById('poster');
+  poster.style.width  = pw + 'px';
+  poster.style.height = ph + 'px';
+  poster.style.setProperty('--circle-size', csz    + 'px');
+  poster.style.setProperty('--top-h',       topH   + 'px');
+  poster.style.setProperty('--margin',      margin + 'px');
+  poster.style.setProperty('--title-size',  (ss * 0.048) + 'px');
+  poster.style.setProperty('--info-size',   (ss * 0.030) + 'px');
+  scalePoster();
+};
+
+// ── Preview scaling ──────────────────────────────────────
+function scalePoster() {
+  const preview = document.querySelector('.tmpl-preview');
+  const wrap    = document.getElementById('poster-wrap');
+  const poster  = document.getElementById('poster');
+  if (!preview || !poster) return;
+  const aw    = preview.clientWidth  - 48;
+  const ah    = preview.clientHeight - 48 - 40;
+  const scale = Math.min(aw / _posterW, ah / _posterH, 1);
+  poster.style.transform = 'scale(' + scale + ')';
+  wrap.style.width  = (_posterW * scale) + 'px';
+  wrap.style.height = (_posterH * scale) + 'px';
+}
+window.addEventListener('resize', function() {
+  if (document.getElementById('tab-template').style.display !== 'none') scalePoster();
+});
+
+// ── Color controls ───────────────────────────────────────
+window.tmplApplyColors = function() {
+  const bg = document.getElementById('c-bg').value;
+  const tc = document.getElementById('c-text').value;
+  document.getElementById('poster').style.background = bg;
+  document.querySelectorAll('.p-title, .p-col').forEach(el => el.style.color = tc);
+  document.getElementById('c-bg-hex').value   = bg;
+  document.getElementById('c-text-hex').value = tc;
+};
+window.tmplSyncHex = function(which) {
+  const hex = document.getElementById('c-' + which + '-hex').value;
+  if (/^#[0-9A-Fa-f]{6}$/.test(hex)) {
+    document.getElementById('c-' + which).value = hex;
+    tmplApplyColors();
+  }
+};
+
+// ── Background uploads ───────────────────────────────────
+window.tmplLoadTopBg = function(input) {
+  const f = input.files[0]; if (!f) return;
+  const fr = new FileReader();
+  fr.onload = e => { document.getElementById('p-photo-top').src = e.target.result; };
+  fr.readAsDataURL(f);
+};
+window.tmplLoadCircleBg = function(input) {
+  const f = input.files[0]; if (!f) return;
+  const fr = new FileReader();
+  fr.onload = e => { document.getElementById('p-photo-circle').src = e.target.result; };
+  fr.readAsDataURL(f);
+};
+
+// ── Download PNG ─────────────────────────────────────────
+window.downloadPosterPNG = async function() {
+  const poster = document.getElementById('poster');
+  const saved  = poster.style.transform;
+  poster.style.transform = 'none';
+  try {
+    const canvas = await html2canvas(poster, {
+      scale: 2, useCORS: true, allowTaint: false, logging: false,
+      width: _posterW, height: _posterH,
+    });
+    poster.style.transform = saved;
+    canvas.toBlob(blob => {
+      const a = Object.assign(document.createElement('a'), {
+        download: 'scapino-poster.png',
+        href: URL.createObjectURL(blob),
+      });
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }, 'image/png');
+  } catch(e) {
+    poster.style.transform = saved;
+    alert('Export failed — upload local image files first for full PNG export.');
+  }
+};
+
+// ── Enter → <br> in contenteditable ─────────────────────
+document.querySelectorAll('[contenteditable]').forEach(el => {
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); document.execCommand('insertLineBreak'); }
+  });
+});
 </script>
 </body>
 </html>
