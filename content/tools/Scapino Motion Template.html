@@ -515,7 +515,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--margin, 54px);
   padding: var(--margin, 54px);
   position: relative;
@@ -549,6 +549,7 @@ body {
   display: block;
   position: relative;
   z-index: 1;
+  color: #fcff2d;
 }
 .p-title {
   font-size: var(--title-size, 52px);
@@ -573,7 +574,7 @@ body {
   width: 100%;
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   position: relative;
   z-index: 1;
   gap: var(--margin, 54px);
@@ -587,6 +588,8 @@ body {
   color: #fcff2d;
   outline: none;
   flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
   cursor: text;
 }
 .p-col:nth-child(2) { text-align: center; }
@@ -665,6 +668,66 @@ input[type="color"].tmpl-swatch {
   transition: border-color var(--transition), color var(--transition);
 }
 .tmpl-upload:hover { border-color: var(--text); color: var(--text); }
+
+/* ── Upload slots ─────────────────────────────────────── */
+.p-bg[data-empty] { display: none; }
+.p-placeholder {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 0;
+  background: #d6d6d6;
+  color: #afafaf;
+}
+.p-bg[data-empty] + .p-placeholder { display: flex; }
+.p-placeholder > svg { width: 10%; height: auto; min-width: 28px; }
+.upload-slot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+  border: 1.5px dashed var(--border);
+  border-radius: 8px;
+  background: transparent;
+  transition: border-color var(--transition);
+  user-select: none;
+}
+.upload-slot:hover { border-color: var(--text); }
+.upload-slot:hover .slot-label { color: var(--text); }
+.slot-label {
+  font-family: var(--font);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--transition);
+  pointer-events: none;
+}
+.slot-remove {
+  display: none;
+  font-family: var(--font);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 0 0 0.25rem;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: color var(--transition);
+}
+.slot-remove:hover { color: var(--text); }
+.upload-slot.has-image { border-style: solid; border-color: var(--text); }
+.upload-slot.has-image .slot-remove { display: block; }
+.upload-slot.has-image .slot-label { color: var(--text); }
 </style>
 </head>
 <body>
@@ -755,12 +818,36 @@ input[type="color"].tmpl-swatch {
       <div id="poster-wrap">
         <div id="poster">
           <div class="p-top">
-            <img class="p-bg" id="p-photo-top" src="https://www.figma.com/api/mcp/asset/a52235f7-95a2-485b-8bfa-9e4aecd48465" alt="">
-            <img class="p-logo" id="p-logo-img" src="https://www.figma.com/api/mcp/asset/6c16e1fb-8115-4d33-947c-65446baac1f5" alt="">
-            <div class="p-title" contenteditable spellcheck="false">Ballet<br>Rotterdam</div>
+            <img class="p-bg" id="p-photo-top" data-empty alt="">
+            <div class="p-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+            <svg class="p-logo" id="p-logo-svg" viewBox="0 0 669 222" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M271.574 154H283.521C289.348 154 292.095 157.08 292.095 161.326C292.095 164.115 290.847 166.446 288.016 167.32C291.221 168.236 292.97 170.692 292.97 173.73C293.011 178.808 289.223 181.68 284.062 181.68H271.574V154ZM277.36 158.995V165.364H282.563C285.602 165.364 286.226 163.574 286.226 161.867C286.226 160.077 285.061 158.995 282.605 158.995H277.36ZM277.36 170.067V176.685H283.437C286.434 176.685 287.142 175.062 287.142 173.231C287.1 171.149 285.727 170.067 283.354 170.067H277.36Z" fill="currentColor"/>
+              <path d="M314.348 181.68L312.6 176.352H300.654L298.906 181.68H292.995L302.444 154H310.852L320.259 181.68H314.348ZM302.277 171.316H310.935L306.606 158.121L302.277 171.316Z" fill="currentColor"/>
+              <path d="M321.921 154H327.707V176.436H338.487V181.68H321.921V154Z" fill="currentColor"/>
+              <path d="M341.159 154H346.945V176.436H357.726V181.68H341.159V154Z" fill="currentColor"/>
+              <path d="M360.398 154H378.421V159.203H366.184V165.072H377.172V170.109H366.184V176.436H378.588V181.68H360.398V154Z" fill="currentColor"/>
+              <path d="M388.155 181.68V159.286H379.789V154.042H402.224V159.286H393.941V181.68H388.155Z" fill="currentColor"/>
+              <path d="M223.307 220.68V193H234.462C240.997 193 243.911 196.247 243.911 201.2C243.911 204.53 241.996 207.152 238.791 208.027C242.912 209.65 244.702 214.062 244.619 220.68H238.75C238.708 210.691 234.421 210.149 231.507 210.149H229.093V220.68H223.307ZM229.093 205.238H234.213C237.459 205.238 238.042 203.198 238.042 201.533C238.042 199.618 236.876 198.161 234.254 198.161H229.093V205.238Z" fill="currentColor"/>
+              <path d="M259.976 192.292C268.717 192.292 274.294 199.119 274.294 206.986C274.294 214.853 268.509 221.388 259.976 221.388C251.11 221.388 245.615 214.853 245.615 206.986C245.615 199.119 251.276 192.292 259.976 192.292ZM259.976 197.745C254.19 197.745 251.734 202.907 251.734 207.069C251.734 211.356 254.481 215.977 259.976 215.977C265.595 215.977 268.134 211.356 268.134 207.069C268.134 202.907 265.761 197.745 259.976 197.745Z" fill="currentColor"/>
+              <path d="M282.376 220.68V198.286H274.009V193.042H296.445V198.286H288.161V220.68H282.376Z" fill="currentColor"/>
+              <path d="M304.459 220.68V198.286H296.093V193.042H318.529V198.286H310.245V220.68H304.459Z" fill="currentColor"/>
+              <path d="M320.341 193H338.365V198.203H326.127V204.072H337.116V209.109H326.127V215.436H338.531V220.68H320.341V193Z" fill="currentColor"/>
+              <path d="M341.897 220.68V193H353.052C359.587 193 362.501 196.247 362.501 201.2C362.501 204.53 360.586 207.152 357.381 208.027C361.502 209.65 363.292 214.062 363.208 220.68H357.339C357.298 210.691 353.01 210.149 350.097 210.149H347.682V220.68H341.897ZM347.682 205.238H352.802C356.049 205.238 356.632 203.198 356.632 201.533C356.632 199.618 355.466 198.161 352.844 198.161H347.682V205.238Z" fill="currentColor"/>
+              <path d="M373.168 193C383.408 192.875 389.402 198.078 389.402 206.57C389.402 214.728 384.282 220.847 373.793 220.68H366.176V193H373.168ZM373.793 198.161H371.961V215.519H373.876C381.119 215.602 383.367 211.357 383.367 206.611C383.408 201.616 380.786 198.12 373.793 198.161Z" fill="currentColor"/>
+              <path d="M410.332 220.68L408.583 215.352H396.637L394.889 220.68H388.978L398.427 193H406.835L416.242 220.68H410.332ZM398.26 210.316H406.918L402.589 197.121L398.26 210.316Z" fill="currentColor"/>
+              <path d="M417.904 220.68V193H426.895L433.097 208.318L439.341 193H448.29V220.68H442.546L442.421 199.285L436.344 214.187H429.85L423.648 199.285V220.68H417.904Z" fill="currentColor"/>
+              <path d="M50.8673 124.941C11.2628 124.763 -2.05712 100.609 0.251663 81.4288H32.2195C31.8643 93.3279 40.9218 97.4127 50.3345 97.4127C60.2801 97.4127 64.3648 93.3279 64.3648 87.112C64.3648 77.6992 51.2225 77.5216 37.9026 74.3248C14.1044 68.6417 2.38285 56.565 2.38285 38.6275C2.38285 11.81 27.2467 0.26612 48.9137 0.26612C85.6767 0.26612 101.128 22.466 99.1742 44.3106H67.9168C69.16 33.8323 59.9249 27.6163 50.3345 27.6163C39.1458 27.6163 35.4162 32.5891 35.2386 36.6739C34.8834 46.2642 47.3153 47.3298 58.5041 49.8162C76.264 53.901 98.2862 61.7153 98.2862 86.7568C98.2862 109.312 79.4607 124.941 50.8673 124.941Z" fill="currentColor"/>
+              <path d="M151.521 126.184C107.477 126.184 90.2499 94.2159 90.2499 62.0705C90.2499 28.3267 112.272 0.0885237 151.699 0.0885237C181.358 0.0885237 203.913 19.802 205.334 44.3106H171.235C168.393 32.5891 157.56 30.1027 151.521 30.1027C131.808 30.1027 124.882 45.909 124.882 62.9585C124.882 80.5408 131.808 95.8143 151.521 95.8143C161.467 95.8143 168.749 91.5519 171.768 81.0736H205.334C201.782 109.134 178.872 126.184 151.521 126.184Z" fill="currentColor"/>
+              <path d="M352.77 3.9957C377.989 3.9957 395.394 21.4004 395.394 43.0674C395.394 68.8193 378.344 86.0464 353.125 86.0464H332.701V122.099H300.556V3.9957H352.77ZM349.928 33.4771H332.701V57.6305H349.751C362.183 57.6305 362.538 48.7506 362.538 44.6658C362.538 40.2259 360.229 33.4771 349.928 33.4771Z" fill="currentColor"/>
+              <path d="M389.633 122.099V3.9957H421.601V122.099H389.633Z" fill="currentColor"/>
+              <path d="M426.11 122.099V3.9957H473.351L512.068 82.4944V3.9957H544.213V122.099H499.991L458.255 38.2723L458.078 122.099H426.11Z" fill="currentColor"/>
+              <path d="M604.543 0C564.189 0 540.541 30.1713 540.541 63.8914C540.541 97.6115 564.362 126.539 604.543 126.539C644.725 126.539 668.19 97.6115 668.19 63.8914C668.19 30.1713 644.369 0 604.543 0ZM603.925 95.6616C586.003 95.6616 571.477 81.1601 571.477 63.2696C571.477 45.3791 586.003 30.8775 603.925 30.8775C621.847 30.8775 636.373 45.3791 636.373 63.2696C636.373 81.1601 621.847 95.6616 603.925 95.6616Z" fill="currentColor"/>
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M271.498 102.03L277.181 122.099H309.504L273.629 3.9957H225.855L188.914 122.099H221.592L227.453 102.03H271.498ZM247.381 33.8511L235.268 75.2128H263.861L252.191 33.8511H247.381Z" fill="currentColor"/>
+            </svg>
           </div>
           <div class="p-circle">
-            <img class="p-bg" id="p-photo-circle" src="https://www.figma.com/api/mcp/asset/a52235f7-95a2-485b-8bfa-9e4aecd48465" alt="">
+            <img class="p-bg" id="p-photo-circle" data-empty alt="">
+            <div class="p-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
             <div class="p-info">
               <div class="p-col" contenteditable spellcheck="false">Origin: The Future<br>is Feminine</div>
               <div class="p-col" contenteditable spellcheck="false">17 01 26<br>19 03 26</div>
@@ -804,12 +891,18 @@ input[type="color"].tmpl-swatch {
         <div class="tmpl-section-title">Images</div>
         <div class="tmpl-field">
           <label class="tmpl-label">Top background</label>
-          <button class="tmpl-upload" onclick="document.getElementById('up-top-bg').click()">↑ Upload photo</button>
+          <div class="upload-slot" id="slot-top" onclick="if(!event.target.classList.contains('slot-remove'))document.getElementById('up-top-bg').click()">
+            <span class="slot-label" id="slot-top-label">↑ Upload photo</span>
+            <button class="slot-remove" onclick="event.stopPropagation();tmplRemoveBg('top')">✕</button>
+          </div>
           <input type="file" id="up-top-bg" style="display:none" accept="image/*" onchange="tmplLoadTopBg(this)">
         </div>
         <div class="tmpl-field">
           <label class="tmpl-label">Circle background</label>
-          <button class="tmpl-upload" onclick="document.getElementById('up-circle-bg').click()">↑ Upload photo</button>
+          <div class="upload-slot" id="slot-circle" onclick="if(!event.target.classList.contains('slot-remove'))document.getElementById('up-circle-bg').click()">
+            <span class="slot-label" id="slot-circle-label">↑ Upload photo</span>
+            <button class="slot-remove" onclick="event.stopPropagation();tmplRemoveBg('circle')">✕</button>
+          </div>
           <input type="file" id="up-circle-bg" style="display:none" accept="image/*" onchange="tmplLoadCircleBg(this)">
         </div>
       </div>
@@ -1292,6 +1385,7 @@ window.tmplApplyColors = function() {
   const tc = document.getElementById('c-text').value;
   document.getElementById('poster').style.background = bg;
   document.querySelectorAll('.p-title, .p-col').forEach(el => el.style.color = tc);
+  document.getElementById('p-logo-svg').style.color = tc;
   document.getElementById('c-bg-hex').value   = bg;
   document.getElementById('c-text-hex').value = tc;
 };
@@ -1304,30 +1398,105 @@ window.tmplSyncHex = function(which) {
 };
 
 // ── Background uploads ───────────────────────────────────
+function _setBg(imgId, slotId, labelId, fileInputId, file) {
+  const fr = new FileReader();
+  fr.onload = e => {
+    const img = document.getElementById(imgId);
+    img.src = e.target.result;
+    img.removeAttribute('data-empty');
+    document.getElementById(slotId).classList.add('has-image');
+    document.getElementById(labelId).textContent = file.name;
+  };
+  fr.readAsDataURL(file);
+  document.getElementById(fileInputId).value = '';
+}
 window.tmplLoadTopBg = function(input) {
   const f = input.files[0]; if (!f) return;
-  const fr = new FileReader();
-  fr.onload = e => { document.getElementById('p-photo-top').src = e.target.result; };
-  fr.readAsDataURL(f);
+  _setBg('p-photo-top', 'slot-top', 'slot-top-label', 'up-top-bg', f);
 };
 window.tmplLoadCircleBg = function(input) {
   const f = input.files[0]; if (!f) return;
-  const fr = new FileReader();
-  fr.onload = e => { document.getElementById('p-photo-circle').src = e.target.result; };
-  fr.readAsDataURL(f);
+  _setBg('p-photo-circle', 'slot-circle', 'slot-circle-label', 'up-circle-bg', f);
+};
+window.tmplRemoveBg = function(which) {
+  const imgId   = which === 'top' ? 'p-photo-top' : 'p-photo-circle';
+  const labelId = 'slot-' + which + '-label';
+  const fileId  = which === 'top' ? 'up-top-bg' : 'up-circle-bg';
+  const img = document.getElementById(imgId);
+  img.src = '';
+  img.setAttribute('data-empty', '');
+  document.getElementById('slot-' + which).classList.remove('has-image');
+  document.getElementById(labelId).textContent = '↑ Upload photo';
+  document.getElementById(fileId).value = '';
 };
 
 // ── Download PNG ─────────────────────────────────────────
 window.downloadPosterPNG = async function() {
-  const poster = document.getElementById('poster');
-  const saved  = poster.style.transform;
-  poster.style.transform = 'none';
+  const poster       = document.getElementById('poster');
+  const pTop         = poster.querySelector('.p-top');
+  const pCircle      = poster.querySelector('.p-circle');
+  const placeholders = poster.querySelectorAll('.p-placeholder');
+
+  // Compute explicit px values from current poster dimensions
+  const ss     = Math.min(_posterW, _posterH);
+  const margin = ss * 0.05;
+  const csz    = ss;
+  const topH   = Math.max(0, _posterH - csz);
+  const infoSz = ss * 0.030;
+
+  // ── Save state ───────────────────────────────────────────
+  const savedTransform = poster.style.transform;
+  const savedTopH      = pTop.style.height;
+  const savedTopPad    = pTop.style.padding;
+  const savedCircleW   = pCircle.style.width;
+  const savedCircleH   = pCircle.style.height;
+  const savedCirclePad = pCircle.style.padding;
+  const savedTopBg     = pTop.style.backgroundImage;
+  const savedCircleBg  = pCircle.style.backgroundImage;
+  const savedTopBgSz   = pTop.style.backgroundSize;
+  const savedCircleBgSz= pCircle.style.backgroundSize;
+  const savedTopBgPos  = pTop.style.backgroundPosition;
+  const savedCircleBgPos = pCircle.style.backgroundPosition;
+
+  const colEls     = poster.querySelectorAll('.p-col');
+  const savedColFs = [...colEls].map(el => el.style.fontSize);
+
+  // ── Apply overrides ──────────────────────────────────────
+  poster.style.transform  = 'none';
+  pTop.style.height       = topH + 'px';
+  pTop.style.padding      = margin + 'px';
+  pCircle.style.width     = csz + 'px';
+  pCircle.style.height    = csz + 'px';
+  pCircle.style.padding   = margin + 'px';
+  colEls.forEach(el => el.style.fontSize = infoSz + 'px');
+
+  // html2canvas doesn't support object-fit: cover on <img>.
+  // Move loaded photos to background-image on their container instead.
+  const imgTop    = document.getElementById('p-photo-top');
+  const imgCircle = document.getElementById('p-photo-circle');
+  const topHasImg    = !imgTop.hasAttribute('data-empty') && imgTop.src;
+  const circleHasImg = !imgCircle.hasAttribute('data-empty') && imgCircle.src;
+
+  if (topHasImg) {
+    imgTop.style.display = 'none';
+    pTop.style.backgroundImage    = `url("${imgTop.src}")`;
+    pTop.style.backgroundSize     = 'cover';
+    pTop.style.backgroundPosition = 'center';
+  }
+  if (circleHasImg) {
+    imgCircle.style.display = 'none';
+    pCircle.style.backgroundImage    = `url("${imgCircle.src}")`;
+    pCircle.style.backgroundSize     = 'cover';
+    pCircle.style.backgroundPosition = 'center';
+  }
+
+  placeholders.forEach(el => el.style.display = 'none');
+
   try {
     const canvas = await html2canvas(poster, {
       scale: 2, useCORS: true, allowTaint: false, logging: false,
       width: _posterW, height: _posterH,
     });
-    poster.style.transform = saved;
     canvas.toBlob(blob => {
       const a = Object.assign(document.createElement('a'), {
         download: 'scapino-poster.png',
@@ -1337,8 +1506,25 @@ window.downloadPosterPNG = async function() {
       URL.revokeObjectURL(a.href);
     }, 'image/png');
   } catch(e) {
-    poster.style.transform = saved;
     alert('Export failed — upload local image files first for full PNG export.');
+  } finally {
+    // ── Restore everything ───────────────────────────────
+    poster.style.transform  = savedTransform;
+    pTop.style.height       = savedTopH;
+    pTop.style.padding      = savedTopPad;
+    pCircle.style.width     = savedCircleW;
+    pCircle.style.height    = savedCircleH;
+    pCircle.style.padding   = savedCirclePad;
+    pTop.style.backgroundImage     = savedTopBg;
+    pTop.style.backgroundSize      = savedTopBgSz;
+    pTop.style.backgroundPosition  = savedTopBgPos;
+    pCircle.style.backgroundImage    = savedCircleBg;
+    pCircle.style.backgroundSize     = savedCircleBgSz;
+    pCircle.style.backgroundPosition = savedCircleBgPos;
+    if (topHasImg)    imgTop.style.display    = '';
+    if (circleHasImg) imgCircle.style.display = '';
+    colEls.forEach((el, i) => el.style.fontSize = savedColFs[i]);
+    placeholders.forEach(el => el.style.display = '');
   }
 };
 
