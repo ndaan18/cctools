@@ -940,7 +940,7 @@ input[type="color"].tmpl-swatch {
         <div class="tmpl-field">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
             <label class="tmpl-label">Scatter distance</label>
-            <span class="tmpl-label" id="scatter-dist-val">50%</span>
+            <span class="tmpl-label" id="scatter-dist-val">30%</span>
           </div>
           <input type="range" id="scatter-dist" min="0" max="100" value="50" step="1"
             oninput="document.getElementById('scatter-dist-val').textContent=this.value+'%'">
@@ -1435,8 +1435,9 @@ function _scatterInit() {
   const distPct = parseFloat(document.getElementById('scatter-dist').value) / 100;
   const maxD    = fs * distPct * 2; // slider 0–100 → 0×–2× font-size
   chars.forEach(c => {
-    c.dx = (Math.random() * 2 - 1) * maxD;
-    c.dy = (Math.random() * 2 - 1) * maxD * 0.7;
+    c.dx    = (Math.random() * 2 - 1) * maxD;
+    c.dy    = (Math.random() * 2 - 1) * maxD * 0.7;
+    c.delay = Math.random() * SCATTER_MAX_DELAY_MS;
   });
 
   // 4. Collision resolution — push overlapping pairs apart until 0 overlap
@@ -1477,28 +1478,26 @@ function _scatterInit() {
   _scatter = { spans: chars, originals };
 }
 
-// Timeline: 500 ms hold at scattered → 500 ms ease to settled
-const SCATTER_HOLD_MS = 500;
-const SCATTER_ANIM_MS = 500;
-const SCATTER_TOTAL_MS = SCATTER_HOLD_MS + SCATTER_ANIM_MS;
+// Timeline: 500 ms hold → per-char random delay → 500 ms ease → 2 s tail
+const SCATTER_HOLD_MS      = 500;
+const SCATTER_ANIM_MS      = 500;
+const SCATTER_TAIL_MS      = 5000;
+const SCATTER_MAX_DELAY_MS = 500;
+const SCATTER_TOTAL_MS     = SCATTER_HOLD_MS + SCATTER_MAX_DELAY_MS + SCATTER_ANIM_MS + SCATTER_TAIL_MS;
 
 // Quintic ease-in-out — maximum easing without overshoot
 function _scatterEase(t) {
   return t < 0.5 ? 16 * t ** 5 : 1 - Math.pow(-2 * t + 2, 5) / 2;
 }
 
-// Apply animation position t ∈ [0,1] to character spans
-function _scatterApplyT(t) {
-  _scatter.spans.forEach(({ el, dx, dy }) => {
-    el.style.transform = `translate(${(dx*(1-t)).toFixed(2)}px,${(dy*(1-t)).toFixed(2)}px)`;
+// Drive each character by raw elapsed ms — each has its own delay baked in
+function _scatterApplyElapsed(elapsed) {
+  _scatter.spans.forEach(({ el, dx, dy, delay }) => {
+    const charElapsed   = elapsed - SCATTER_HOLD_MS - delay;
+    const animProgress  = Math.max(0, Math.min(charElapsed / SCATTER_ANIM_MS, 1));
+    const t             = _scatterEase(animProgress);
+    el.style.transform  = `translate(${(dx*(1-t)).toFixed(2)}px,${(dy*(1-t)).toFixed(2)}px)`;
   });
-}
-
-// Map scrubber value [0,100] → animation t through hold + ease
-// Scrubber 0–50 = hold period (scattered), 50–100 = eased animation
-function _scrubToT(val) {
-  const animProgress = Math.max(0, Math.min((val / 100 - 0.5) / 0.5, 1));
-  return _scatterEase(animProgress);
 }
 
 function _scatterBtn(label, state) {
@@ -1521,19 +1520,18 @@ window.scatterPlay = function() {
   }
 
   const isNew = (!_scatter || state === 'done');
-  if (isNew) { _scatterInit(); _scatterApplyT(0); scrubber.value = 0; }
+  if (isNew) { _scatterInit(); _scatterApplyElapsed(0); scrubber.value = 0; }
 
   _scatterBtn('◼ Stop', 'playing');
 
-  // Fake start time so playback resumes from current scrubber position
-  const startVal = parseFloat(scrubber.value);
-  const t0 = performance.now() - (startVal / 100) * SCATTER_TOTAL_MS;
+  // Offset start time so playback resumes from current scrubber position
+  const startElapsed = (parseFloat(scrubber.value) / 100) * SCATTER_TOTAL_MS;
+  const t0 = performance.now() - startElapsed;
 
   function tick(now) {
-    const elapsed      = now - t0;
+    const elapsed       = now - t0;
     const scrubProgress = Math.min(elapsed / SCATTER_TOTAL_MS, 1);
-    const animProgress  = Math.max(0, Math.min((elapsed - SCATTER_HOLD_MS) / SCATTER_ANIM_MS, 1));
-    _scatterApplyT(_scatterEase(animProgress));
+    _scatterApplyElapsed(elapsed);
     scrubber.value = scrubProgress * 100;
     if (scrubProgress < 1) {
       _scatterRAF = requestAnimationFrame(tick);
@@ -1548,7 +1546,7 @@ window.scatterPlay = function() {
 window.scatterScrub = function(val) {
   if (_scatterRAF) { cancelAnimationFrame(_scatterRAF); _scatterRAF = null; }
   if (!_scatter) _scatterInit();
-  _scatterApplyT(_scrubToT(val));
+  _scatterApplyElapsed((val / 100) * SCATTER_TOTAL_MS);
   _scatterBtn(+val >= 100 ? '↺ Replay' : '▶ Play', +val >= 100 ? 'done' : 'paused');
 };
 
