@@ -940,7 +940,7 @@ input[type="color"].tmpl-swatch {
         <div class="tmpl-field">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
             <label class="tmpl-label">Scatter distance</label>
-            <span class="tmpl-label" id="scatter-dist-val">30%</span>
+            <span class="tmpl-label" id="scatter-dist-val">40%</span>
           </div>
           <input type="range" id="scatter-dist" min="0" max="100" value="50" step="1"
             oninput="document.getElementById('scatter-dist-val').textContent=this.value+'%'">
@@ -1405,14 +1405,14 @@ function _scatterInit() {
   const originals = [], chars = [];
 
   // 1. Wrap each text character in a bare span (no transform yet)
-  cols.forEach(col => {
+  cols.forEach((col, colIdx) => {
     originals.push({ col, html: col.innerHTML });
     col.setAttribute('contenteditable', 'false');
     col.innerHTML = col.innerHTML.replace(/(<[^>]*>)|([^<])/g, (_, tag, ch) => {
       if (tag) return tag;
       return `<span style="display:inline-block">${ch}</span>`;
     });
-    col.querySelectorAll('span').forEach(el => chars.push({ el, dx: 0, dy: 0 }));
+    col.querySelectorAll('span').forEach(el => chars.push({ el, dx: 0, dy: 0, colIdx }));
   });
 
   // 2. Measure rects in element space (divide by poster scale so translate() values match)
@@ -1430,50 +1430,108 @@ function _scatterInit() {
     };
   });
 
-  // 3. Assign random initial scatter offsets
   const fs      = parseFloat(getComputedStyle(cols[0]).fontSize) || 33;
   const distPct = parseFloat(document.getElementById('scatter-dist').value) / 100;
   const maxD    = fs * distPct * 2; // slider 0–100 → 0×–2× font-size
-  chars.forEach(c => {
-    c.dx    = (Math.random() * 2 - 1) * maxD;
-    c.dy    = (Math.random() * 2 - 1) * maxD * 0.7;
-    c.delay = Math.random() * SCATTER_MAX_DELAY_MS;
-  });
+  const N       = chars.length;
 
-  // 4. Collision resolution — push overlapping pairs apart until 0 overlap
-  const GAP = 1; // minimum px clearance between any two glyphs
-  for (let iter = 0; iter < 200; iter++) {
-    let anyMoved = false;
-    for (let i = 0; i < chars.length; i++) {
-      for (let j = i + 1; j < chars.length; j++) {
-        const ri = rects[i], rj = rects[j];
-        const ci = chars[i], cj = chars[j];
-        const ix = ri.x + ci.dx, iy = ri.y + ci.dy;
-        const jx = rj.x + cj.dx, jy = rj.y + cj.dy;
-        const ox = Math.min(ix + ri.w, jx + rj.w) - Math.max(ix, jx);
-        const oy = Math.min(iy + ri.h, jy + rj.h) - Math.max(iy, jy);
-        if (ox > 0 && oy > 0) {
-          anyMoved = true;
-          // Resolve along the axis with less overlap (minimum separation vector)
-          if (ox <= oy) {
-            const push = (ox + GAP) / 2;
-            if (ix < jx) { ci.dx -= push; cj.dx += push; }
-            else          { ci.dx += push; cj.dx -= push; }
-          } else {
-            const push = (oy + GAP) / 2;
-            if (iy < jy) { ci.dy -= push; cj.dy += push; }
-            else          { ci.dy += push; cj.dy -= push; }
+  // Resolve a candidate's scatter (t=0) overlaps so the start frame is clean
+  function resolveScatter(dxs, dys) {
+    const GAP = 1;
+    for (let iter = 0; iter < 200; iter++) {
+      let moved = false;
+      for (let i = 0; i < N; i++) {
+        for (let j = i + 1; j < N; j++) {
+          const ri = rects[i], rj = rects[j];
+          const ix = ri.x + dxs[i], iy = ri.y + dys[i];
+          const jx = rj.x + dxs[j], jy = rj.y + dys[j];
+          const ox = Math.min(ix + ri.w, jx + rj.w) - Math.max(ix, jx);
+          const oy = Math.min(iy + ri.h, jy + rj.h) - Math.max(iy, jy);
+          if (ox > 0 && oy > 0) {
+            moved = true;
+            if (ox <= oy) {
+              const p = (ox + GAP) / 2;
+              if (ix < jx) { dxs[i] -= p; dxs[j] += p; } else { dxs[i] += p; dxs[j] -= p; }
+            } else {
+              const p = (oy + GAP) / 2;
+              if (iy < jy) { dys[i] -= p; dys[j] += p; } else { dys[i] += p; dys[j] -= p; }
+            }
           }
         }
       }
+      if (!moved) break;
     }
-    if (!anyMoved) break;
   }
 
-  // 5. Apply resolved scatter transforms
-  chars.forEach(c => {
-    c.el.style.transform = `translate(${c.dx.toFixed(1)}px,${c.dy.toFixed(1)}px)`;
-  });
+  // Simulate the actual animation (real easing + per-axis delays) and return
+  // the worst pairwise overlap as a fraction of the smaller glyph's area.
+  function evalConfig(dxs, dys, dXs, dYs) {
+    const startMs = SCATTER_HOLD_MS;
+    const endMs   = SCATTER_HOLD_MS + SCATTER_MAX_DELAY_MS + SCATTER_ANIM_MS;
+    const STEPS   = 22;
+    let worst = 0;
+    const px = new Array(N), py = new Array(N);
+    for (let s = 0; s < STEPS; s++) {
+      const elapsed = startMs + (s / (STEPS - 1)) * (endMs - startMs);
+      for (let i = 0; i < N; i++) {
+        const ax = (elapsed - SCATTER_HOLD_MS - dXs[i]) / SCATTER_ANIM_MS;
+        const ay = (elapsed - SCATTER_HOLD_MS - dYs[i]) / SCATTER_ANIM_MS;
+        const tx = _scatterEase(Math.max(0, Math.min(ax, 1)));
+        const ty = _scatterEase(Math.max(0, Math.min(ay, 1)));
+        px[i] = rects[i].x + dxs[i] * (1 - tx);
+        py[i] = rects[i].y + dys[i] * (1 - ty);
+      }
+      for (let i = 0; i < N; i++) {
+        const ri = rects[i];
+        for (let j = i + 1; j < N; j++) {
+          const rj = rects[j];
+          const ox = Math.min(px[i] + ri.w, px[j] + rj.w) - Math.max(px[i], px[j]);
+          if (ox <= 0) continue;
+          const oy = Math.min(py[i] + ri.h, py[j] + rj.h) - Math.max(py[i], py[j]);
+          if (oy <= 0) continue;
+          const pct = (ox * oy) / Math.min(ri.w * ri.h, rj.w * rj.h);
+          if (pct > worst) worst = pct;
+        }
+      }
+    }
+    return worst;
+  }
+
+  // 3. Try random seeds, keep the best one (or stop early under threshold)
+  const TARGET    = 0.05;  // ≤ 1 % overlap target
+  const MAX_TRIES = 10000;
+  let bestDx = null, bestDy = null, bestDX = null, bestDY = null, bestScore = Infinity;
+
+  for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
+    const dxs = new Array(N), dys = new Array(N);
+    const dXs = new Array(N), dYs = new Array(N);
+    for (let i = 0; i < N; i++) {
+      dxs[i] = (Math.random() * 2 - 1) * maxD;
+      dys[i] = (Math.random() * 2 - 1) * maxD * 0.7;
+      dXs[i] = Math.random() * SCATTER_MAX_DELAY_MS;
+      dYs[i] = Math.random() * SCATTER_MAX_DELAY_MS;
+    }
+    resolveScatter(dxs, dys);
+    const score = evalConfig(dxs, dys, dXs, dYs);
+    if (score < bestScore) {
+      bestScore = score;
+      bestDx = dxs; bestDy = dys; bestDX = dXs; bestDY = dYs;
+    }
+    if (score <= TARGET) break;
+  }
+
+  // 4. Apply the chosen config
+  const colOrder = [0, 2, 1]; // stagger rank per colIdx: 0→first, 1→third, 2→second
+  for (let i = 0; i < N; i++) {
+    const staggerRank = colOrder[chars[i].colIdx] ?? chars[i].colIdx;
+    chars[i].dx             = bestDx[i];
+    chars[i].dy             = bestDy[i];
+    chars[i].delayX         = bestDX[i] + staggerRank * SCATTER_COL_STAGGER;
+    chars[i].delayY         = bestDY[i] + staggerRank * SCATTER_COL_STAGGER;
+    chars[i].opacityToggleMs = staggerRank * SCATTER_COL_STAGGER + SCATTER_ANIM_MS / 2 + Math.random() * (SCATTER_ANIM_MS * 1.2);
+    chars[i].el.style.opacity   = '0';
+    chars[i].el.style.transform = `translate(${bestDx[i].toFixed(1)}px,${bestDy[i].toFixed(1)}px)`;
+  }
 
   _scatter = { spans: chars, originals };
 }
@@ -1483,20 +1541,32 @@ const SCATTER_HOLD_MS      = 500;
 const SCATTER_ANIM_MS      = 500;
 const SCATTER_TAIL_MS      = 5000;
 const SCATTER_MAX_DELAY_MS = 500;
+const SCATTER_COL_STAGGER  = 400; // ms offset added per textbox (col 0 first, col 2 last)
 const SCATTER_TOTAL_MS     = SCATTER_HOLD_MS + SCATTER_MAX_DELAY_MS + SCATTER_ANIM_MS + SCATTER_TAIL_MS;
 
-// Quintic ease-in-out — maximum easing without overshoot
-function _scatterEase(t) {
-  return t < 0.5 ? 16 * t ** 5 : 1 - Math.pow(-2 * t + 2, 5) / 2;
+// cubic-bezier(1, 0, 0, 1) — solved numerically via Newton's method
+function _scatterEase(x) {
+  const X1 = 1, Y1 = 0, X2 = 0, Y2 = 1;
+  const bezX  = t => 3*(1-t)*(1-t)*t*X1 + 3*(1-t)*t*t*X2 + t*t*t;
+  const bezXd = t => 3*(1-t)*(1-3*t)*X1 + 3*t*(2-3*t)*X2 + 3*t*t;
+  const bezY  = t => 3*(1-t)*(1-t)*t*Y1 + 3*(1-t)*t*t*Y2 + t*t*t;
+  let t = x;
+  for (let i = 0; i < 10; i++) {
+    const d = bezXd(t);
+    if (Math.abs(d) < 1e-9) break;
+    t = Math.max(0, Math.min(1, t - (bezX(t) - x) / d));
+  }
+  return bezY(t);
 }
 
-// Drive each character by raw elapsed ms — each has its own delay baked in
+// Drive each character by raw elapsed ms — X and Y each have their own delay
 function _scatterApplyElapsed(elapsed) {
-  _scatter.spans.forEach(({ el, dx, dy, delay }) => {
-    const charElapsed   = elapsed - SCATTER_HOLD_MS - delay;
-    const animProgress  = Math.max(0, Math.min(charElapsed / SCATTER_ANIM_MS, 1));
-    const t             = _scatterEase(animProgress);
-    el.style.transform  = `translate(${(dx*(1-t)).toFixed(2)}px,${(dy*(1-t)).toFixed(2)}px)`;
+  _scatter.spans.forEach(c => {
+    const { el, dx, dy, delayX, delayY, opacityToggleMs } = c;
+    const tx = _scatterEase(Math.max(0, Math.min((elapsed - SCATTER_HOLD_MS - delayX) / SCATTER_ANIM_MS, 1)));
+    const ty = _scatterEase(Math.max(0, Math.min((elapsed - SCATTER_HOLD_MS - delayY) / SCATTER_ANIM_MS, 1)));
+    el.style.transform = `translate(${(dx*(1-tx)).toFixed(2)}px,${(dy*(1-ty)).toFixed(2)}px)`;
+    el.style.opacity   = elapsed >= SCATTER_HOLD_MS + opacityToggleMs ? '1' : '0';
   });
 }
 
