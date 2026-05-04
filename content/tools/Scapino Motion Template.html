@@ -584,7 +584,6 @@ body {
   font-weight: 400;
   letter-spacing: -0.03em;
   line-height: 0.94;
-  text-transform: uppercase;
   color: #fcff2d;
   outline: none;
   flex: 1;
@@ -1410,6 +1409,7 @@ function _scatterInit() {
     col.setAttribute('contenteditable', 'false');
     col.innerHTML = col.innerHTML.replace(/(<[^>]*>)|([^<])/g, (_, tag, ch) => {
       if (tag) return tag;
+      if (/\s/.test(ch)) return ch; // leave whitespace as plain text so it doesn't collapse and word-breaks still work
       return `<span style="display:inline-block">${ch}</span>`;
     });
     col.querySelectorAll('span').forEach(el => chars.push({ el, dx: 0, dy: 0, colIdx }));
