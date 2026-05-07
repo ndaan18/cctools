@@ -698,7 +698,7 @@ input[type="color"].tmpl-swatch {
   background: #d6d6d6;
   color: #afafaf;
 }
-.p-bg[data-empty] + .p-placeholder { display: flex; }
+.p-bg-img[data-empty] + .p-bg-video[data-empty] + .p-placeholder { display: flex; }
 .p-placeholder > svg { width: 10%; height: auto; min-width: 28px; }
 /* ── Motion scrubber ──────────────────────────────────── */
 .scatter-row { display: flex; gap: 0.5rem; margin-top: 0.625rem; }
@@ -865,7 +865,8 @@ input[type="color"].tmpl-swatch {
       <div id="poster-wrap">
         <div id="poster">
           <div class="p-top">
-            <img class="p-bg" id="p-photo-top" data-empty alt="">
+            <img class="p-bg p-bg-img" id="p-photo-top" data-empty alt="">
+            <video class="p-bg p-bg-video" id="p-video-top" data-empty muted playsinline preload="auto"></video>
             <div class="p-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
             <svg class="p-logo" id="p-logo-svg" viewBox="0 0 669 222" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M271.574 154H283.521C289.348 154 292.095 157.08 292.095 161.326C292.095 164.115 290.847 166.446 288.016 167.32C291.221 168.236 292.97 170.692 292.97 173.73C293.011 178.808 289.223 181.68 284.062 181.68H271.574V154ZM277.36 158.995V165.364H282.563C285.602 165.364 286.226 163.574 286.226 161.867C286.226 160.077 285.061 158.995 282.605 158.995H277.36ZM277.36 170.067V176.685H283.437C286.434 176.685 287.142 175.062 287.142 173.231C287.1 171.149 285.727 170.067 283.354 170.067H277.36Z" fill="currentColor"/>
@@ -893,7 +894,8 @@ input[type="color"].tmpl-swatch {
             </svg>
           </div>
           <div class="p-circle">
-            <img class="p-bg" id="p-photo-circle" data-empty alt="">
+            <img class="p-bg p-bg-img" id="p-photo-circle" data-empty alt="">
+            <video class="p-bg p-bg-video" id="p-video-circle" data-empty muted playsinline preload="auto"></video>
             <div class="p-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
             <div class="p-info">
               <div class="p-col" contenteditable spellcheck="false" oninput="tmplSyncColToSidebar(0)">Origin: The Future<br>is Feminine</div>
@@ -1006,7 +1008,7 @@ Rotterdam</textarea>
             <span class="slot-label" id="slot-top-label">↑ Upload photo</span>
             <button class="slot-remove" onclick="event.stopPropagation();tmplRemoveBg('top')">✕</button>
           </div>
-          <input type="file" id="up-top-bg" style="display:none" accept="image/*" onchange="tmplLoadTopBg(this)">
+          <input type="file" id="up-top-bg" style="display:none" accept="image/*,video/*" onchange="tmplLoadTopBg(this)">
         </div>
         <div class="tmpl-field">
           <label class="tmpl-label">Circle background</label>
@@ -1014,7 +1016,7 @@ Rotterdam</textarea>
             <span class="slot-label" id="slot-circle-label">↑ Upload photo</span>
             <button class="slot-remove" onclick="event.stopPropagation();tmplRemoveBg('circle')">✕</button>
           </div>
-          <input type="file" id="up-circle-bg" style="display:none" accept="image/*" onchange="tmplLoadCircleBg(this)">
+          <input type="file" id="up-circle-bg" style="display:none" accept="image/*,video/*" onchange="tmplLoadCircleBg(this)">
         </div>
       </div>
       <div class="tmpl-section">
@@ -1723,18 +1725,39 @@ function _scatterBtn(label, state) {
   b.dataset.state = state;
 }
 
+// ── Video timeline sync ──────────────────────────────────
+function _liveBgVideos() {
+  return ['p-video-top', 'p-video-circle']
+    .map(id => document.getElementById(id))
+    .filter(v => v && !v.hasAttribute('data-empty') && v.src);
+}
+function _seekVideo(v, elapsedMs) {
+  const set = () => {
+    const t   = Math.max(0, elapsedMs / 1000);
+    const dur = v.duration;
+    v.currentTime = (isFinite(dur) && dur > 0) ? Math.min(t, Math.max(0, dur - 0.001)) : t;
+  };
+  if (v.readyState >= 1) { try { set(); } catch(_) {} }
+  else v.addEventListener('loadedmetadata', () => { try { set(); } catch(_) {} }, { once: true });
+}
+function _seekVideosTo(elapsedMs) { _liveBgVideos().forEach(v => _seekVideo(v, elapsedMs)); }
+function _playVideos()  { _liveBgVideos().forEach(v => { v.play().catch(()=>{}); }); }
+function _pauseVideos() { _liveBgVideos().forEach(v => { try { v.pause(); } catch(_) {} }); }
+
 function _startPlayback() {
   const scrubber = document.getElementById('scatter-scrubber');
   _scatterBtn('◼ Stop', 'playing');
   const startElapsed = (parseFloat(scrubber.value) / 100) * SCATTER_TOTAL_MS;
   const t0 = performance.now() - startElapsed;
+  _seekVideosTo(startElapsed);
+  _playVideos();
   function tick(now) {
     const elapsed = now - t0;
     const scrubProgress = Math.min(elapsed / SCATTER_TOTAL_MS, 1);
     _scatterApplyElapsed(elapsed);
     scrubber.value = scrubProgress * 100;
     if (scrubProgress < 1) { _scatterRAF = requestAnimationFrame(tick); }
-    else { _scatterRAF = null; _scatterBtn('↺ Replay', 'done'); }
+    else { _scatterRAF = null; _pauseVideos(); _scatterBtn('↺ Replay', 'done'); }
   }
   _scatterRAF = requestAnimationFrame(tick);
 }
@@ -1746,6 +1769,7 @@ window.scatterPlay = function() {
 
   if (state === 'playing') {
     cancelAnimationFrame(_scatterRAF); _scatterRAF = null;
+    _pauseVideos();
     const val = parseFloat(scrubber.value);
     _scatterBtn(val >= 100 ? '↺ Replay' : '▶ Play', val >= 100 ? 'done' : 'paused');
     return;
@@ -1765,7 +1789,10 @@ window.scatterPlay = function() {
 window.scatterScrub = function(val) {
   if (_scatterRAF) { cancelAnimationFrame(_scatterRAF); _scatterRAF = null; }
   if (!_scatter) _scatterInit();
-  _scatterApplyElapsed((val / 100) * SCATTER_TOTAL_MS);
+  const elapsed = (val / 100) * SCATTER_TOTAL_MS;
+  _scatterApplyElapsed(elapsed);
+  _pauseVideos();
+  _seekVideosTo(elapsed);
   _scatterBtn(+val >= 100 ? '↺ Replay' : '▶ Play', +val >= 100 ? 'done' : 'paused');
 };
 
@@ -1780,6 +1807,8 @@ window.scatterReset = function() {
   }
   const scrubber = document.getElementById('scatter-scrubber');
   if (scrubber) scrubber.value = 0;
+  _pauseVideos();
+  _seekVideosTo(0);
   _scatterBtn('▶ Play', 'idle');
 };
 
@@ -1831,34 +1860,56 @@ function _captureState() {
   const cols      = document.querySelectorAll('#poster .p-col');
   const topImg    = document.getElementById('p-photo-top');
   const circleImg = document.getElementById('p-photo-circle');
+  const topVid    = document.getElementById('p-video-top');
+  const circleVid = document.getElementById('p-video-circle');
   return {
-    col:         [...cols].map(c => c.innerHTML),
-    size:        document.getElementById('txt-size')?.value    ?? '33',
-    leading:     document.getElementById('txt-leading')?.value ?? '0.94',
-    kerning:     document.getElementById('txt-kerning')?.value ?? '-0.03',
-    bg:          document.getElementById('c-bg')?.value        ?? '#fbff2d',
-    tc:          document.getElementById('c-text')?.value      ?? '#fcff2d',
-    logo:        document.getElementById('c-logo')?.value      ?? '#fcff2d',
-    w:           document.getElementById('inp-w')?.value       ?? '2160',
-    h:           document.getElementById('inp-h')?.value       ?? '3240',
-    topSrc:      topImg?.getAttribute('src')    ?? '',
-    topEmpty:    topImg?.hasAttribute('data-empty') ?? true,
-    circleSrc:   circleImg?.getAttribute('src') ?? '',
-    circleEmpty: circleImg?.hasAttribute('data-empty') ?? true,
+    col:            [...cols].map(c => c.innerHTML),
+    size:           document.getElementById('txt-size')?.value    ?? '33',
+    leading:        document.getElementById('txt-leading')?.value ?? '0.94',
+    kerning:        document.getElementById('txt-kerning')?.value ?? '-0.03',
+    bg:             document.getElementById('c-bg')?.value        ?? '#fbff2d',
+    tc:             document.getElementById('c-text')?.value      ?? '#fcff2d',
+    logo:           document.getElementById('c-logo')?.value      ?? '#fcff2d',
+    w:              document.getElementById('inp-w')?.value       ?? '2160',
+    h:              document.getElementById('inp-h')?.value       ?? '3240',
+    topSrc:         topImg?.getAttribute('src')    ?? '',
+    topEmpty:       topImg?.hasAttribute('data-empty') ?? true,
+    circleSrc:      circleImg?.getAttribute('src') ?? '',
+    circleEmpty:    circleImg?.hasAttribute('data-empty') ?? true,
+    topVidSrc:      topVid?.getAttribute('src')    ?? '',
+    topVidEmpty:    topVid?.hasAttribute('data-empty') ?? true,
+    circleVidSrc:   circleVid?.getAttribute('src') ?? '',
+    circleVidEmpty: circleVid?.hasAttribute('data-empty') ?? true,
   };
 }
 
-function _restoreImg(imgId, slotId, labelId, src, empty) {
+function _restoreMedia(imgId, vidId, slotId, labelId, imgSrc, imgEmpty, vidSrc, vidEmpty) {
   const img = document.getElementById(imgId);
-  if (!img) return;
-  if (empty) {
-    img.src = ''; img.setAttribute('data-empty', '');
-    document.getElementById(slotId)?.classList.remove('has-image');
-    document.getElementById(labelId).textContent = '↑ Upload photo';
-  } else if (src) {
-    img.src = src; img.removeAttribute('data-empty');
-    document.getElementById(slotId)?.classList.add('has-image');
-    document.getElementById(labelId).textContent = '(restored)';
+  const vid = document.getElementById(vidId);
+  if (img) {
+    if (imgEmpty) { img.src = ''; img.setAttribute('data-empty', ''); }
+    else if (imgSrc) { img.src = imgSrc; img.removeAttribute('data-empty'); }
+  }
+  if (vid) {
+    if (vidEmpty) { _clearVideo(vid); }
+    else if (vidSrc) {
+      try { vid.pause(); } catch(_) {}
+      vid.src = vidSrc;
+      vid.removeAttribute('data-empty');
+      vid.muted = true; vid.loop = false; vid.playsInline = true;
+      const scrubber = document.getElementById('scatter-scrubber');
+      const elapsed  = scrubber ? (parseFloat(scrubber.value) / 100) * SCATTER_TOTAL_MS : 0;
+      _seekVideo(vid, elapsed);
+    }
+  }
+  const slot  = document.getElementById(slotId);
+  const label = document.getElementById(labelId);
+  if (imgEmpty && vidEmpty) {
+    slot?.classList.remove('has-image');
+    if (label) label.textContent = '↑ Upload photo';
+  } else {
+    slot?.classList.add('has-image');
+    if (label) label.textContent = '(restored)';
   }
 }
 
@@ -1882,8 +1933,10 @@ function _applyState(s) {
     updatePosterSizing();
     tmplApplyTypography();
     tmplApplyColors();
-    _restoreImg('p-photo-top',    'slot-top',    'slot-top-label',    s.topSrc,    s.topEmpty);
-    _restoreImg('p-photo-circle', 'slot-circle', 'slot-circle-label', s.circleSrc, s.circleEmpty);
+    _restoreMedia('p-photo-top',    'p-video-top',    'slot-top',    'slot-top-label',
+                  s.topSrc,    s.topEmpty,    s.topVidSrc    ?? '', s.topVidEmpty    ?? true);
+    _restoreMedia('p-photo-circle', 'p-video-circle', 'slot-circle', 'slot-circle-label',
+                  s.circleSrc, s.circleEmpty, s.circleVidSrc ?? '', s.circleVidEmpty ?? true);
   } finally {
     _applyingState = false;
     _updateHistoryUI();
@@ -2038,36 +2091,60 @@ window.tmplCanvasCommit = function(inp) {
   _canvasMinAtFocus = newMin;
 };
 
-// ── Background uploads ───────────────────────────────────
-function _setBg(imgId, slotId, labelId, fileInputId, file) {
-  _pushUndo();
-  const fr = new FileReader();
-  fr.onload = e => {
-    const img = document.getElementById(imgId);
-    img.src = e.target.result;
-    img.removeAttribute('data-empty');
-    document.getElementById(slotId).classList.add('has-image');
-    document.getElementById(labelId).textContent = file.name;
-  };
-  fr.readAsDataURL(file);
-  document.getElementById(fileInputId).value = '';
+// ── Background uploads (image OR video) ──────────────────
+function _clearVideo(vid) {
+  if (!vid) return;
+  try { vid.pause(); } catch(_) {}
+  vid.removeAttribute('src');
+  try { vid.load(); } catch(_) {}
+  vid.setAttribute('data-empty', '');
 }
-window.tmplLoadTopBg = function(input) {
-  const f = input.files[0]; if (!f) return;
-  _setBg('p-photo-top', 'slot-top', 'slot-top-label', 'up-top-bg', f);
-};
-window.tmplLoadCircleBg = function(input) {
-  const f = input.files[0]; if (!f) return;
-  _setBg('p-photo-circle', 'slot-circle', 'slot-circle-label', 'up-circle-bg', f);
-};
+function _setBg(which, file) {
+  _pushUndo();
+  const isVideo = (file.type || '').startsWith('video/');
+  const imgId   = which === 'top' ? 'p-photo-top'  : 'p-photo-circle';
+  const vidId   = which === 'top' ? 'p-video-top'  : 'p-video-circle';
+  const slotId  = 'slot-' + which;
+  const labelId = 'slot-' + which + '-label';
+  const fileId  = which === 'top' ? 'up-top-bg'    : 'up-circle-bg';
+  const img = document.getElementById(imgId);
+  const vid = document.getElementById(vidId);
+
+  if (isVideo) {
+    img.src = '';
+    img.setAttribute('data-empty', '');
+    try { vid.pause(); } catch(_) {}
+    vid.src = URL.createObjectURL(file);
+    vid.removeAttribute('data-empty');
+    vid.muted = true; vid.loop = false; vid.playsInline = true;
+    const scrubber = document.getElementById('scatter-scrubber');
+    const elapsed  = scrubber ? (parseFloat(scrubber.value) / 100) * SCATTER_TOTAL_MS : 0;
+    _seekVideo(vid, elapsed);
+  } else {
+    _clearVideo(vid);
+    const fr = new FileReader();
+    fr.onload = e => {
+      img.src = e.target.result;
+      img.removeAttribute('data-empty');
+    };
+    fr.readAsDataURL(file);
+  }
+  document.getElementById(slotId).classList.add('has-image');
+  document.getElementById(labelId).textContent = file.name;
+  document.getElementById(fileId).value = '';
+}
+window.tmplLoadTopBg    = function(input) { const f = input.files[0]; if (f) _setBg('top', f); };
+window.tmplLoadCircleBg = function(input) { const f = input.files[0]; if (f) _setBg('circle', f); };
 window.tmplRemoveBg = function(which) {
   _pushUndo();
   const imgId   = which === 'top' ? 'p-photo-top' : 'p-photo-circle';
+  const vidId   = which === 'top' ? 'p-video-top' : 'p-video-circle';
   const labelId = 'slot-' + which + '-label';
   const fileId  = which === 'top' ? 'up-top-bg' : 'up-circle-bg';
   const img = document.getElementById(imgId);
   img.src = '';
   img.setAttribute('data-empty', '');
+  _clearVideo(document.getElementById(vidId));
   document.getElementById('slot-' + which).classList.remove('has-image');
   document.getElementById(labelId).textContent = '↑ Upload photo';
   document.getElementById(fileId).value = '';
@@ -2113,24 +2190,52 @@ window.downloadPosterPNG = async function() {
   pCircle.style.padding   = margin + 'px';
   colEls.forEach(el => el.style.fontSize = infoSz + 'px');
 
-  // html2canvas doesn't support object-fit: cover on <img>.
-  // Move loaded photos to background-image on their container instead.
+  // html2canvas doesn't support object-fit: cover on <img>/<video>.
+  // Move loaded photos / current video frame to background-image on their container instead.
   const imgTop    = document.getElementById('p-photo-top');
   const imgCircle = document.getElementById('p-photo-circle');
-  const topHasImg    = !imgTop.hasAttribute('data-empty') && imgTop.src;
+  const vidTop    = document.getElementById('p-video-top');
+  const vidCircle = document.getElementById('p-video-circle');
+  const topHasImg    = !imgTop.hasAttribute('data-empty')    && imgTop.src;
   const circleHasImg = !imgCircle.hasAttribute('data-empty') && imgCircle.src;
+  const topHasVid    = !vidTop.hasAttribute('data-empty')    && vidTop.src && vidTop.videoWidth;
+  const circleHasVid = !vidCircle.hasAttribute('data-empty') && vidCircle.src && vidCircle.videoWidth;
+
+  function _videoFrameDataURL(v) {
+    const c = document.createElement('canvas');
+    c.width  = v.videoWidth;
+    c.height = v.videoHeight;
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    try { return c.toDataURL('image/png'); } catch(_) { return ''; }
+  }
 
   if (topHasImg) {
     imgTop.style.display = 'none';
     pTop.style.backgroundImage    = `url("${imgTop.src}")`;
     pTop.style.backgroundSize     = 'cover';
     pTop.style.backgroundPosition = 'center';
+  } else if (topHasVid) {
+    vidTop.style.display = 'none';
+    const url = _videoFrameDataURL(vidTop);
+    if (url) {
+      pTop.style.backgroundImage    = `url("${url}")`;
+      pTop.style.backgroundSize     = 'cover';
+      pTop.style.backgroundPosition = 'center';
+    }
   }
   if (circleHasImg) {
     imgCircle.style.display = 'none';
     pCircle.style.backgroundImage    = `url("${imgCircle.src}")`;
     pCircle.style.backgroundSize     = 'cover';
     pCircle.style.backgroundPosition = 'center';
+  } else if (circleHasVid) {
+    vidCircle.style.display = 'none';
+    const url = _videoFrameDataURL(vidCircle);
+    if (url) {
+      pCircle.style.backgroundImage    = `url("${url}")`;
+      pCircle.style.backgroundSize     = 'cover';
+      pCircle.style.backgroundPosition = 'center';
+    }
   }
 
   placeholders.forEach(el => el.style.display = 'none');
@@ -2166,6 +2271,8 @@ window.downloadPosterPNG = async function() {
     pCircle.style.backgroundPosition = savedCircleBgPos;
     if (topHasImg)    imgTop.style.display    = '';
     if (circleHasImg) imgCircle.style.display = '';
+    if (topHasVid)    vidTop.style.display    = '';
+    if (circleHasVid) vidCircle.style.display = '';
     colEls.forEach((el, i) => el.style.fontSize = savedColFs[i]);
     placeholders.forEach(el => el.style.display = '');
   }
