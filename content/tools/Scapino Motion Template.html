@@ -494,21 +494,11 @@ body {
   align-items: center;
   justify-content: center;
   overflow: auto;
-  padding: 1.5rem;
-  gap: 0.75rem;
   border-right: 1px solid var(--border);
-}
-.tmpl-hint {
-  font-size: 0.625rem;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  flex-shrink: 0;
 }
 
 /* ── Poster ───────────────────────────────────────────── */
-#poster-wrap { position: relative; flex-shrink: 0; }
+#poster-wrap { position: relative; flex: 1; align-self: stretch; overflow: hidden; }
 #poster {
   transform-origin: top left;
   background: #fbff2d;
@@ -876,14 +866,13 @@ input[type="color"].tmpl-swatch {
 
   <div id="tab-template" style="display:none">
     <div class="tmpl-preview">
-      <span class="tmpl-hint">Click text to edit directly on the poster</span>
       <div id="poster-wrap">
         <div id="poster">
           <div class="p-top">
             <img class="p-bg p-bg-img" id="p-photo-top" data-empty alt="">
             <video class="p-bg p-bg-video" id="p-video-top" data-empty muted playsinline preload="auto"></video>
             <div class="p-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
-            <div class="p-frame-handle" data-frame-target="top" title="Drag to pan • Scroll to zoom • Double-click to reset"></div>
+            <div class="p-frame-handle" data-frame-target="top" title="Drag to pan • Double-click to reset"></div>
             <svg class="p-logo" id="p-logo-svg" viewBox="0 0 669 222" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M271.574 154H283.521C289.348 154 292.095 157.08 292.095 161.326C292.095 164.115 290.847 166.446 288.016 167.32C291.221 168.236 292.97 170.692 292.97 173.73C293.011 178.808 289.223 181.68 284.062 181.68H271.574V154ZM277.36 158.995V165.364H282.563C285.602 165.364 286.226 163.574 286.226 161.867C286.226 160.077 285.061 158.995 282.605 158.995H277.36ZM277.36 170.067V176.685H283.437C286.434 176.685 287.142 175.062 287.142 173.231C287.1 171.149 285.727 170.067 283.354 170.067H277.36Z" fill="currentColor"/>
               <path d="M314.348 181.68L312.6 176.352H300.654L298.906 181.68H292.995L302.444 154H310.852L320.259 181.68H314.348ZM302.277 171.316H310.935L306.606 158.121L302.277 171.316Z" fill="currentColor"/>
@@ -913,7 +902,7 @@ input[type="color"].tmpl-swatch {
             <img class="p-bg p-bg-img" id="p-photo-circle" data-empty alt="">
             <video class="p-bg p-bg-video" id="p-video-circle" data-empty muted playsinline preload="auto"></video>
             <div class="p-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
-            <div class="p-frame-handle" data-frame-target="circle" title="Drag to pan • Scroll to zoom • Double-click to reset"></div>
+            <div class="p-frame-handle" data-frame-target="circle" title="Drag to pan • Double-click to reset"></div>
             <div class="p-info">
               <div class="p-col" contenteditable spellcheck="false" oninput="tmplSyncColToSidebar(0)">Origin: The Future<br>is Feminine</div>
               <div class="p-col" contenteditable spellcheck="false" oninput="tmplSyncColToSidebar(1)">17 01 26<br>19 03 26</div>
@@ -1899,22 +1888,110 @@ window.updatePosterSizing = function() {
   scalePoster();
 };
 
-// ── Preview scaling ──────────────────────────────────────
+// ── Preview scaling + canvas pan/zoom ────────────────────
+let _baseScale   = 1;
+let _canvasZoom  = 1;
+let _canvasPanX  = 0;
+let _canvasPanY  = 0;
+
+function _applyCanvasTransform() {
+  const poster = document.getElementById('poster');
+  if (!poster) return;
+  const s = _baseScale * _canvasZoom;
+  poster.style.transform = `translate(${_canvasPanX}px, ${_canvasPanY}px) scale(${s})`;
+}
 function scalePoster() {
   const preview = document.querySelector('.tmpl-preview');
-  const wrap    = document.getElementById('poster-wrap');
   const poster  = document.getElementById('poster');
   if (!preview || !poster) return;
-  const aw    = preview.clientWidth  - 48;
-  const ah    = preview.clientHeight - 48 - 40;
-  const scale = Math.min(aw / _posterW, ah / _posterH, 1);
-  poster.style.transform = 'scale(' + scale + ')';
-  wrap.style.width  = (_posterW * scale) + 'px';
-  wrap.style.height = (_posterH * scale) + 'px';
+  const aw = preview.clientWidth;
+  const ah = preview.clientHeight;
+  _baseScale = Math.min(aw / _posterW, ah / _posterH) * 0.85;
+  _canvasZoom = 1;
+  _canvasPanX = (aw - _posterW * _baseScale) / 2;
+  _canvasPanY = (ah - _posterH * _baseScale) / 2;
+  _applyCanvasTransform();
 }
+window.tmplResetCanvasView = function() {
+  scalePoster();
+};
 window.addEventListener('resize', function() {
   if (document.getElementById('tab-template').style.display !== 'none') scalePoster();
 });
+
+// Space-key tracking — when held, left-mouse drags pan the canvas
+let _spaceHeld     = false;
+let _canvasPanning = false;
+let _panStartCx = 0, _panStartCy = 0, _panStartCanvasX = 0, _panStartCanvasY = 0;
+
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' || e.repeat) return;
+  if (e.target.closest('input, textarea, [contenteditable]')) return;
+  _spaceHeld = true;
+  e.preventDefault();
+  document.body.style.cursor = 'grab';
+});
+document.addEventListener('keyup', e => {
+  if (e.code !== 'Space') return;
+  _spaceHeld = false;
+  if (!_canvasPanning) document.body.style.cursor = '';
+});
+
+(function setupCanvasNav() {
+  const preview = document.querySelector('.tmpl-preview');
+  if (!preview) return;
+
+  // Pan: middle-mouse-button OR (space + left-button). Capture phase so we beat child handlers.
+  preview.addEventListener('mousedown', e => {
+    if (e.button === 1 || (e.button === 0 && _spaceHeld)) {
+      e.preventDefault();
+      e.stopPropagation();
+      _canvasPanning  = true;
+      _panStartCx     = e.clientX; _panStartCy = e.clientY;
+      _panStartCanvasX = _canvasPanX; _panStartCanvasY = _canvasPanY;
+      document.body.style.cursor = 'grabbing';
+    }
+  }, true);
+
+  document.addEventListener('mousemove', e => {
+    if (!_canvasPanning) return;
+    _canvasPanX = _panStartCanvasX + (e.clientX - _panStartCx);
+    _canvasPanY = _panStartCanvasY + (e.clientY - _panStartCy);
+    _applyCanvasTransform();
+  });
+  document.addEventListener('mouseup', () => {
+    if (!_canvasPanning) return;
+    _canvasPanning = false;
+    document.body.style.cursor = _spaceHeld ? 'grab' : '';
+  });
+
+  // Zoom: Alt+scroll, anchored to cursor position
+  preview.addEventListener('wheel', e => {
+    if (!e.altKey) return;
+    e.preventDefault();
+    const wrap = document.getElementById('poster-wrap');
+    if (!wrap) return;
+    const wr = wrap.getBoundingClientRect();
+    const cx = e.clientX - wr.left;
+    const cy = e.clientY - wr.top;
+    const oldScale = _baseScale * _canvasZoom;
+    const factor   = Math.exp(-e.deltaY * 0.0015);
+    const newZoom  = Math.max(0.1, Math.min(10, _canvasZoom * factor));
+    const newScale = _baseScale * newZoom;
+    _canvasPanX = cx - (cx - _canvasPanX) * (newScale / oldScale);
+    _canvasPanY = cy - (cy - _canvasPanY) * (newScale / oldScale);
+    _canvasZoom = newZoom;
+    _applyCanvasTransform();
+  }, { passive: false });
+
+  // Reset view: 0 (or Home) when not editing text
+  document.addEventListener('keydown', e => {
+    if (e.code !== 'Digit0' && e.code !== 'Numpad0' && e.key !== 'Home') return;
+    if (e.target.closest('input, textarea, [contenteditable]')) return;
+    e.preventDefault();
+    tmplResetCanvasView();
+  });
+})();
 
 // ── History (undo / redo) ────────────────────────────────
 const _undoStack = [], _redoStack = [];
@@ -2248,10 +2325,10 @@ function _clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function _setupFrameHandle(handle) {
   const which = handle.dataset.frameTarget;
   let dragging = false, startMx = 0, startMy = 0, startFx = 50, startFy = 50;
-  let wheelArmed = true, wheelTimer = null;
 
   handle.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
+    if (_spaceHeld) return; // canvas pan takes over when space is held
     if (!_frameContainer(which).classList.contains('has-media')) return;
     _pushUndo();
     dragging = true;
@@ -2274,13 +2351,17 @@ function _setupFrameHandle(handle) {
     if (dragging) { dragging = false; handle.classList.remove('dragging'); }
   });
 
+  // Scroll to zoom media in-mask (plain scroll, no Alt)
+  let _wheelArmed = true, _wheelTimer = null;
   handle.addEventListener('wheel', e => {
+    if (e.altKey) return; // Alt+scroll is canvas zoom
     if (!_frameContainer(which).classList.contains('has-media')) return;
     e.preventDefault();
-    if (wheelArmed) { _pushUndo(); wheelArmed = false; }
-    if (wheelTimer) clearTimeout(wheelTimer);
-    wheelTimer = setTimeout(() => { wheelArmed = true; wheelTimer = null; }, 400);
-    _framing[which].scale = _clamp(_framing[which].scale - e.deltaY * 0.0015, 1, 5);
+    e.stopPropagation();
+    if (_wheelArmed) { _pushUndo(); _wheelArmed = false; }
+    if (_wheelTimer) clearTimeout(_wheelTimer);
+    _wheelTimer = setTimeout(() => { _wheelArmed = true; _wheelTimer = null; }, 400);
+    _framing[which].scale = _clamp((_framing[which].scale || 1) - e.deltaY * 0.0015, 1, 5);
     tmplApplyFraming(which);
   }, { passive: false });
 
