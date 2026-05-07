@@ -1108,8 +1108,69 @@ Rotterdam</textarea>
     <!-- Export panel -->
     <div id="panel-export" class="tmpl-edit" style="display:none">
       <div class="panel-header"><div class="panel-header-title">Export</div></div>
+      <div class="tmpl-section">
+        <div class="tmpl-section-title">Settings</div>
+        <div class="tmpl-field">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
+            <label class="tmpl-label">FPS</label>
+            <span class="tmpl-label" id="exp-fps-val">24</span>
+          </div>
+          <input type="range" id="exp-fps" min="12" max="60" value="24" step="1"
+            oninput="tmplExpFpsChange(+this.value)"
+            ondblclick="this.value=24;tmplExpFpsChange(24);_mbpsOffset=0" title="Double-click to reset">
+        </div>
+        <div class="tmpl-field">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
+            <label class="tmpl-label">Bitrate</label>
+            <span class="tmpl-label" id="exp-mbps-val">48 Mbps</span>
+          </div>
+          <input type="range" id="exp-mbps" min="1" max="200" value="48" step="1"
+            oninput="tmplExpMbpsChange(+this.value)"
+            ondblclick="this.value=Math.max(1,Math.min(200,(+document.getElementById('exp-fps').value)*2));tmplExpMbpsChange(+this.value);_mbpsOffset=0" title="Double-click to reset to fps×2">
+        </div>
+        <div class="tmpl-field">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
+            <label class="tmpl-label">Resolution</label>
+            <span class="tmpl-label" id="exp-res-val">100%</span>
+          </div>
+          <input type="range" id="exp-res" min="25" max="200" value="100" step="5"
+            oninput="tmplUpdateExpRes(this.value)"
+            ondblclick="this.value=100;tmplUpdateExpRes(100)" title="Double-click to reset">
+          <div style="margin-top:0.3rem;font-size:0.625rem;color:var(--muted)" id="exp-res-dims">2160 × 3240</div>
+        </div>
+      </div>
+      <div class="tmpl-section">
+        <div class="tmpl-section-title">Print / Image</div>
+        <div class="tmpl-field">
+          <label class="tmpl-label" style="margin-bottom:0.4rem;display:block">Format</label>
+          <div style="display:flex;gap:0.375rem">
+            <button class="btn active" id="exp-fmt-pdf" onclick="tmplSetExpFmt('pdf')" style="flex:1">PDF</button>
+            <button class="btn" id="exp-fmt-png" onclick="tmplSetExpFmt('png')" style="flex:1">PNG</button>
+            <button class="btn" id="exp-fmt-jpg" onclick="tmplSetExpFmt('jpg')" style="flex:1">JPG</button>
+          </div>
+        </div>
+        <div class="tmpl-field">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
+            <label class="tmpl-label">Bleed</label>
+            <span class="tmpl-label" id="exp-bleed-val">3 mm</span>
+          </div>
+          <input type="range" id="exp-bleed" min="0" max="10" value="3" step="0.5"
+            oninput="document.getElementById('exp-bleed-val').textContent=this.value+' mm'"
+            ondblclick="this.value=3;document.getElementById('exp-bleed-val').textContent='3 mm'" title="Double-click to reset">
+        </div>
+        <div class="tmpl-field">
+          <label class="tmpl-label" style="margin-bottom:0.5rem;display:block">Marks</label>
+          <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;cursor:pointer;margin-bottom:0.35rem">
+            <input type="checkbox" id="exp-crop-marks"> Crop marks
+          </label>
+          <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;cursor:pointer">
+            <input type="checkbox" id="exp-print-marks"> Print marks
+          </label>
+        </div>
+      </div>
       <div class="panel-footer">
         <button class="btn btn-dl" id="btn-dl-mp4" style="width:100%" onclick="downloadPosterMP4()">↓ Download MP4</button>
+        <button class="btn btn-dl" id="btn-dl-print" style="width:100%;margin-top:0.4rem" onclick="downloadPosterPrint()">↓ Download Print</button>
         <button class="btn" style="width:100%;margin-top:0.4rem;font-size:0.7rem" onclick="downloadPosterPNG()">↓ Download Still</button>
         <div style="margin-top:0.5rem;font-size:0.625rem;color:var(--muted);line-height:1.6">Upload local files for<br>best export quality.</div>
       </div>
@@ -1915,6 +1976,8 @@ window.updatePosterSizing = function() {
   const pw = Math.max(100, parseInt(document.getElementById('inp-w').value) || 2160);
   const ph = Math.max(100, parseInt(document.getElementById('inp-h').value) || 3240);
   _posterW = pw; _posterH = ph;
+  const _expRes = document.getElementById('exp-res');
+  if (_expRes) tmplUpdateExpRes(_expRes.value);
   const ss     = Math.min(pw, ph);       // shortest side
   const margin = ss * 0.05;              // 5% of shortest side
   const csz    = ss;                     // circle = shortest side square
@@ -2253,6 +2316,363 @@ window.tmplCanvasHChange = function() {
   updatePosterSizing();
 };
 
+window.tmplUpdateExpRes = function(val) {
+  document.getElementById('exp-res-val').textContent = val + '%';
+  const s = val / 100;
+  document.getElementById('exp-res-dims').textContent =
+    Math.round(_posterW * s) + ' × ' + Math.round(_posterH * s);
+};
+
+let _mbpsOffset = 0;
+window.tmplExpFpsChange = function(fps) {
+  document.getElementById('exp-fps-val').textContent = fps;
+  const mbps = Math.max(1, Math.min(200, fps * 2 + _mbpsOffset));
+  document.getElementById('exp-mbps').value = mbps;
+  document.getElementById('exp-mbps-val').textContent = mbps + ' Mbps';
+};
+window.tmplExpMbpsChange = function(mbps) {
+  document.getElementById('exp-mbps-val').textContent = mbps + ' Mbps';
+  const fps = parseInt(document.getElementById('exp-fps').value) || 24;
+  _mbpsOffset = mbps - fps * 2;
+};
+
+async function _saveBlob(blob, suggestedName) {
+  if ('showSaveFilePicker' in window) {
+    const ext  = suggestedName.split('.').pop();
+    const mime = blob.type;
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName,
+        types: [{ description: ext.toUpperCase() + ' file', accept: { [mime]: ['.' + ext] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+  const a = Object.assign(document.createElement('a'), {
+    download: suggestedName,
+    href: URL.createObjectURL(blob),
+  });
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Print export ─────────────────────────────────────────
+let _expPrintFmt = 'pdf';
+window.tmplSetExpFmt = function(fmt) {
+  _expPrintFmt = fmt;
+  ['pdf','png','jpg'].forEach(f => {
+    const b = document.getElementById('exp-fmt-' + f);
+    if (b) b.classList.toggle('active', f === fmt);
+  });
+};
+
+async function _loadJsPDF() {
+  if (window.jspdf?.jsPDF) return window.jspdf.jsPDF;
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+    s.onload  = () => window.jspdf?.jsPDF ? resolve(window.jspdf.jsPDF) : reject(new Error('jsPDF missing'));
+    s.onerror = () => reject(new Error('Failed to load jsPDF'));
+    document.head.appendChild(s);
+  });
+}
+
+function _drawRegMark(ctx, x, y, r) {
+  ctx.save();
+  ctx.strokeStyle = '#000'; ctx.fillStyle = '#000';
+  const lw = Math.max(1, r * 0.08);
+  ctx.lineWidth = lw;
+  // White background so mark is readable over bleed colour
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(x, y, r * 1.7, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#000';
+  // Outer circle
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+  // Inner circle (bullseye)
+  ctx.beginPath(); ctx.arc(x, y, r * 0.5, 0, Math.PI * 2); ctx.stroke();
+  // Centre dot
+  ctx.beginPath(); ctx.arc(x, y, r * 0.15, 0, Math.PI * 2); ctx.fill();
+  // Crosshair — gap through centre circle, extends beyond outer
+  const ext = r * 1.6, gap = r * 0.18;
+  ctx.beginPath();
+  ctx.moveTo(x - ext, y); ctx.lineTo(x - gap, y);
+  ctx.moveTo(x + gap, y); ctx.lineTo(x + ext, y);
+  ctx.moveTo(x, y - ext); ctx.lineTo(x, y - gap);
+  ctx.moveTo(x, y + gap); ctx.lineTo(x, y + ext);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function _drawColorBar(ctx, x, y, w, h) {
+  // Adobe-style CMYK process bar: C M Y K | R G B | grayscale ramp
+  const process = [
+    { c: '#00ffff', l: 'C' },
+    { c: '#ff00ff', l: 'M' },
+    { c: '#ffff00', l: 'Y' },
+    { c: '#000000', l: 'K' },
+    { c: '#ff0000', l: 'R' },
+    { c: '#00ff00', l: 'G' },
+    { c: '#0000ff', l: 'B' },
+  ];
+  const graySteps = 11; // 0%–100% in 10% steps
+  const totalSwatches = process.length + graySteps;
+  const sw = w / totalSwatches;
+  const fs = Math.max(6, Math.min(h * 0.38, 14));
+  ctx.font = `bold ${fs}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  process.forEach(({ c, l }, i) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x + i * sw, y, Math.ceil(sw) + 1, h);
+    // Label in contrasting colour
+    ctx.fillStyle = (c === '#000000' || c === '#0000ff') ? '#fff' : '#000';
+    ctx.fillText(l, x + i * sw + sw / 2, y + h / 2);
+  });
+
+  for (let i = 0; i < graySteps; i++) {
+    const pct = i / (graySteps - 1);
+    const v = Math.round(255 * (1 - pct));
+    ctx.fillStyle = `rgb(${v},${v},${v})`;
+    ctx.fillRect(x + (process.length + i) * sw, y, Math.ceil(sw) + 1, h);
+    if (i === 0 || i === graySteps - 1 || i === Math.floor(graySteps / 2)) {
+      ctx.fillStyle = pct > 0.5 ? '#fff' : '#000';
+      ctx.fillText(Math.round(pct * 100) + '%', x + (process.length + i) * sw + sw / 2, y + h / 2);
+    }
+  }
+}
+
+window.downloadPosterPrint = async function() {
+  const btn = document.getElementById('btn-dl-print');
+  if (btn && btn.disabled) return;
+  if (btn) { btn.disabled = true; btn.textContent = '◌ Preparing…'; }
+
+  const fmt        = _expPrintFmt;
+  const bleedMm    = parseFloat(document.getElementById('exp-bleed').value) || 0;
+  const doCrop     = document.getElementById('exp-crop-marks').checked;
+  const doPrint    = document.getElementById('exp-print-marks').checked;
+  const hasMarks   = doCrop || doPrint;
+  const mmToPx     = 300 / 25.4;
+  const bleedPx    = Math.round(bleedMm * mmToPx);
+  const markAreaPx = hasMarks ? Math.round(15 * mmToPx) : 0;
+
+  const poster       = document.getElementById('poster');
+  const pTop         = poster.querySelector('.p-top');
+  const pCircle      = poster.querySelector('.p-circle');
+  const colEls       = poster.querySelectorAll('.p-col');
+  const placeholders = poster.querySelectorAll('.p-placeholder');
+  const imgTop    = document.getElementById('p-photo-top');
+  const imgCircle = document.getElementById('p-photo-circle');
+  const vidTop    = document.getElementById('p-video-top');
+  const vidCircle = document.getElementById('p-video-circle');
+  const topHasImg    = !imgTop.hasAttribute('data-empty')    && imgTop.src;
+  const circleHasImg = !imgCircle.hasAttribute('data-empty') && imgCircle.src;
+  const topHasVid    = !vidTop.hasAttribute('data-empty')    && vidTop.src && vidTop.videoWidth;
+  const circleHasVid = !vidCircle.hasAttribute('data-empty') && vidCircle.src && vidCircle.videoWidth;
+
+  const saved = _exportBuildOverrides(poster, pTop, pCircle, colEls, placeholders);
+
+  const ss     = Math.min(_posterW, _posterH);
+  const topH   = Math.max(0, _posterH - ss);
+  if (topHasImg) {
+    imgTop.style.display = 'none';
+    const url = _renderFramedToDataURL(imgTop, imgTop.naturalWidth, imgTop.naturalHeight, _posterW, topH, _framing.top);
+    if (url) { pTop.style.backgroundImage = `url("${url}")`; pTop.style.backgroundSize = '100% 100%'; pTop.style.backgroundPosition = '0 0'; }
+  } else if (topHasVid) {
+    vidTop.style.display = 'none';
+    const url = _renderFramedToDataURL(vidTop, vidTop.videoWidth, vidTop.videoHeight, _posterW, topH, _framing.top);
+    if (url) { pTop.style.backgroundImage = `url("${url}")`; pTop.style.backgroundSize = '100% 100%'; pTop.style.backgroundPosition = '0 0'; }
+  }
+  if (circleHasImg) {
+    imgCircle.style.display = 'none';
+    const url = _renderFramedToDataURL(imgCircle, imgCircle.naturalWidth, imgCircle.naturalHeight, ss, ss, _framing.circle);
+    if (url) { pCircle.style.backgroundImage = `url("${url}")`; pCircle.style.backgroundSize = '100% 100%'; pCircle.style.backgroundPosition = '0 0'; }
+  } else if (circleHasVid) {
+    vidCircle.style.display = 'none';
+    const url = _renderFramedToDataURL(vidCircle, vidCircle.videoWidth, vidCircle.videoHeight, ss, ss, _framing.circle);
+    if (url) { pCircle.style.backgroundImage = `url("${url}")`; pCircle.style.backgroundSize = '100% 100%'; pCircle.style.backgroundPosition = '0 0'; }
+  }
+
+  // Force design-view state: scatter at rest, videos at frame 0
+  const hadDesignView = poster.classList.contains('design-view');
+  poster.classList.add('design-view');
+  _pauseVideos();
+  _seekVideosTo(0);
+  await new Promise(r => setTimeout(r, 80)); // let seek settle
+
+  try {
+    const posterCanvas = await html2canvas(poster, {
+      scale: 1, width: _posterW, height: _posterH,
+      useCORS: true, allowTaint: false, logging: false,
+    });
+
+    const pW = _posterW, pH = _posterH;
+    const colorBarH = doPrint ? Math.round(8 * mmToPx) : 0;
+    const colorBarGap = doPrint ? Math.round(4 * mmToPx) : 0;
+    const totalW = pW + 2 * (bleedPx + markAreaPx);
+    const totalH = pH + 2 * (bleedPx + markAreaPx) + colorBarH + colorBarGap;
+
+    const out = document.createElement('canvas');
+    out.width = totalW; out.height = totalH;
+    const ctx = out.getContext('2d');
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, totalW, totalH);
+
+    const px0 = markAreaPx + bleedPx;
+    const py0 = markAreaPx + bleedPx;
+
+    ctx.drawImage(posterCanvas, px0, py0);
+
+    if (bleedPx > 0) {
+      const bgColor = getComputedStyle(poster).backgroundColor || '#fbff2d';
+
+      // ── TOP bleed (including top-left / top-right corners) ──────────────
+      // Use the raw source image so actual photo content extends above the poster.
+      const topSrc  = topHasImg ? imgTop : topHasVid ? vidTop : null;
+      const topSrcW = topHasImg ? imgTop.naturalWidth  : topHasVid ? vidTop.videoWidth  : 0;
+      const topSrcH = topHasImg ? imgTop.naturalHeight : topHasVid ? vidTop.videoHeight : 0;
+      let topFromImage = false;
+
+      if (topSrc && topSrcW && topSrcH && topH > 0) {
+        const cover = Math.max(_posterW / topSrcW, topH / topSrcH);
+        const dW = topSrcW * cover * (_framing.top.scale || 1);
+        const dH = topSrcH * cover * (_framing.top.scale || 1);
+        const dX = (_framing.top.x / 100) * (_posterW - dW);
+        const dY = (_framing.top.y / 100) * (topH - dH);
+
+        // ── Top bleed band (above poster) ──────────────────────────────────
+        // Clip extends 1px into the poster so any subpixel yellow seam at the
+        // top of the html2canvas capture is covered by real source content.
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px0 - bleedPx, py0 - bleedPx, pW + 2 * bleedPx, bleedPx + 1);
+        ctx.clip();
+        ctx.drawImage(topSrc, px0 + dX, py0 + dY, dW, dH);
+        ctx.restore();
+
+        // Source-y slice for the bleed band (+1px to match the extended clip)
+        const sYb0 = Math.max(0, (-bleedPx - dY) * topSrcH / dH);
+        const sYb1 = Math.min(topSrcH, (1 - dY) * topSrcH / dH);
+        const sHb  = Math.max(1, Math.ceil(sYb1 - sYb0));
+
+        // Fill corner gaps where image doesn't reach horizontally (bleed band)
+        const leftGapW = Math.max(0, Math.ceil(dX + bleedPx));
+        if (leftGapW > 0)
+          ctx.drawImage(topSrc, 0, sYb0, 1, sHb, px0 - bleedPx, py0 - bleedPx, leftGapW, bleedPx + 1);
+        const rightEdgeX = px0 + dX + dW;
+        const rightGapW  = Math.max(0, Math.ceil(px0 + pW + bleedPx - rightEdgeX));
+        if (rightGapW > 0)
+          ctx.drawImage(topSrc, topSrcW - 1, sYb0, 1, sHb, Math.floor(rightEdgeX), py0 - bleedPx, rightGapW + 1, bleedPx + 1);
+
+        // ── Side bleeds alongside the top image ────────────────────────────
+        // Source-y slice for the full top-section height
+        const sYs0 = Math.max(0, (0 - dY) * topSrcH / dH);
+        const sYs1 = Math.min(topSrcH, (topH - dY) * topSrcH / dH);
+        const sHs  = Math.max(1, Math.ceil(sYs1 - sYs0));
+        const imgX0 = px0 + dX, imgX1 = px0 + dX + dW;
+        const xScale = topSrcW / dW;
+
+        // Left bleed strip — use actual source content where image overlaps, pixel-stretch elsewhere
+        {
+          const bX0 = px0 - bleedPx, bX1 = px0;
+          const ovX0 = Math.min(bX1, Math.max(bX0, imgX0));
+          const ovX1 = Math.max(bX0, Math.min(bX1, imgX1));
+          if (ovX1 > ovX0)
+            ctx.drawImage(topSrc, (ovX0 - imgX0) * xScale, sYs0, (ovX1 - ovX0) * xScale, sHs,
+                          ovX0, py0, ovX1 - ovX0, topH);
+          if (ovX0 > bX0) ctx.drawImage(topSrc, 0,           sYs0, 1, sHs, bX0,  py0, ovX0 - bX0, topH);
+          if (ovX1 < bX1) ctx.drawImage(topSrc, topSrcW - 1, sYs0, 1, sHs, ovX1, py0, bX1 - ovX1, topH);
+        }
+
+        // Right bleed strip — same approach
+        {
+          const bX0 = px0 + pW, bX1 = px0 + pW + bleedPx;
+          const ovX0 = Math.min(bX1, Math.max(bX0, imgX0));
+          const ovX1 = Math.max(bX0, Math.min(bX1, imgX1));
+          if (ovX1 > ovX0)
+            ctx.drawImage(topSrc, (ovX0 - imgX0) * xScale, sYs0, (ovX1 - ovX0) * xScale, sHs,
+                          ovX0, py0, ovX1 - ovX0, topH);
+          if (ovX0 > bX0) ctx.drawImage(topSrc, 0,           sYs0, 1, sHs, bX0,  py0, ovX0 - bX0, topH);
+          if (ovX1 < bX1) ctx.drawImage(topSrc, topSrcW - 1, sYs0, 1, sHs, ovX1, py0, bX1 - ovX1, topH);
+        }
+
+        topFromImage = true;
+      }
+
+      if (!topFromImage) {
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(px0 - bleedPx, py0 - bleedPx, pW + 2 * bleedPx, bleedPx); // top band fallback
+        ctx.fillRect(px0 - bleedPx, py0, bleedPx, pH);                           // left
+        ctx.fillRect(px0 + pW,      py0, bleedPx, pH);                           // right
+      } else {
+        // Circle area: background colour only
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(px0 - bleedPx, py0 + topH, bleedPx, pH - topH); // left circle
+        ctx.fillRect(px0 + pW,      py0 + topH, bleedPx, pH - topH); // right circle
+      }
+
+      // Bottom + all bottom corners: background colour
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(px0 - bleedPx, py0 + pH, pW + 2 * bleedPx, bleedPx);
+    }
+
+    if (doCrop) {
+      ctx.save();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = Math.max(1, Math.round(mmToPx * 0.25));
+      const gap = Math.round(2 * mmToPx);
+      const len = Math.round(6 * mmToPx);
+      for (const [cx, cy, hd, vd] of [[px0,py0,-1,-1],[px0+pW,py0,1,-1],[px0,py0+pH,-1,1],[px0+pW,py0+pH,1,1]]) {
+        ctx.beginPath(); ctx.moveTo(cx+hd*gap, cy); ctx.lineTo(cx+hd*(gap+len), cy); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx, cy+vd*gap); ctx.lineTo(cx, cy+vd*(gap+len)); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    if (doPrint) {
+      const regR   = Math.round(4 * mmToPx);
+      const regOff = Math.round(markAreaPx / 2);
+      _drawRegMark(ctx, px0 + pW/2,           py0 - bleedPx - regOff,        regR);
+      _drawRegMark(ctx, px0 + pW/2,           py0 + pH + bleedPx + regOff,   regR);
+      _drawRegMark(ctx, px0 - bleedPx - regOff, py0 + pH/2,                  regR);
+      _drawRegMark(ctx, px0 + pW + bleedPx + regOff, py0 + pH/2,             regR);
+      _drawColorBar(ctx, px0, py0 + pH + bleedPx + markAreaPx + colorBarGap, pW, colorBarH);
+    }
+
+    if (fmt === 'pdf') {
+      const jsPDF = await _loadJsPDF();
+      const wMm = totalW / mmToPx, hMm = totalH / mmToPx;
+      const doc = new jsPDF({ unit: 'mm', format: [wMm, hMm], orientation: 'portrait', compress: true });
+      doc.addImage(out.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, wMm, hMm);
+      await _saveBlob(doc.output('blob'), 'scapino-poster.pdf');
+    } else {
+      const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
+      out.toBlob(async blob => { await _saveBlob(blob, `scapino-poster.${fmt}`); }, mime, fmt === 'jpg' ? 0.93 : undefined);
+    }
+  } catch(e) {
+    console.error(e);
+    alert('Print export failed: ' + (e?.message || e));
+  } finally {
+    _exportRestoreOverrides(poster, pTop, pCircle, colEls, placeholders, saved,
+                            imgTop, imgCircle, vidTop, vidCircle,
+                            topHasImg, circleHasImg, topHasVid, circleHasVid);
+    // Restore design-view and video state
+    if (!hadDesignView) poster.classList.remove('design-view');
+    const scrubber = document.getElementById('scatter-scrubber');
+    if (!hadDesignView && scrubber) {
+      const elapsed = (parseFloat(scrubber.value) / 100) * SCATTER_TOTAL_MS;
+      _seekVideosTo(elapsed);
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '↓ Download Print'; }
+  }
+};
+
 // Evaluate a math expression like "1080*2" safely (digits, + - * / ( ) . only)
 function _evalMath(str) {
   const s = String(str).trim();
@@ -2425,7 +2845,14 @@ function _renderFramedToDataURL(source, srcW, srcH, cW, cH, frame) {
   const dH = srcH * cover * (frame.scale || 1);
   const dX = (frame.x / 100) * (cW - dW);
   const dY = (frame.y / 100) * (cH - dH);
-  ctx.drawImage(source, dX, dY, dW, dH);
+  // Snap to integer destination so cover edges land on full pixels — prevents
+  // a translucent 1px sliver at canvas edges that lets the underlying yellow
+  // poster background show through.
+  const fdX = Math.floor(dX);
+  const fdY = Math.floor(dY);
+  const fdW = Math.ceil(dW + (dX - fdX));
+  const fdH = Math.ceil(dH + (dY - fdY));
+  ctx.drawImage(source, fdX, fdY, fdW, fdH);
   try { return c.toDataURL('image/png'); } catch(_) { return ''; }
 }
 window.tmplLoadTopBg    = function(input) { const f = input.files[0]; if (f) _setBg('top', f); };
@@ -2458,6 +2885,7 @@ function _exportBuildOverrides(poster, pTop, pCircle, colEls, placeholders) {
   const saved = {
     transform:    poster.style.transform,
     topH:         pTop.style.height,      topPad:  pTop.style.padding,
+    topGap:       pTop.style.gap,
     circleW:      pCircle.style.width,    circleH: pCircle.style.height,
     circlePad:    pCircle.style.padding,
     topBg:        pTop.style.backgroundImage,
@@ -2470,6 +2898,7 @@ function _exportBuildOverrides(poster, pTop, pCircle, colEls, placeholders) {
   };
   poster.style.transform = 'none';
   pTop.style.height      = topH + 'px';    pTop.style.padding   = margin + 'px';
+  pTop.style.gap         = '0';
   pCircle.style.width    = csz  + 'px';    pCircle.style.height = csz + 'px';
   pCircle.style.padding  = margin + 'px';
   colEls.forEach(el => el.style.fontSize = infoSz + 'px');
@@ -2482,6 +2911,7 @@ function _exportRestoreOverrides(poster, pTop, pCircle, colEls, placeholders, sa
                                   topHasImg, circleHasImg, topHasVid, circleHasVid) {
   poster.style.transform          = saved.transform;
   pTop.style.height               = saved.topH;    pTop.style.padding    = saved.topPad;
+  pTop.style.gap                  = saved.topGap;
   pCircle.style.width             = saved.circleW; pCircle.style.height  = saved.circleH;
   pCircle.style.padding           = saved.circlePad;
   pTop.style.backgroundImage      = saved.topBg;   pTop.style.backgroundSize  = saved.topBgSz;
@@ -2590,15 +3020,18 @@ window.downloadPosterMP4 = async function() {
     }
   }
 
-  // Native canvas resolution; H.264 needs even dimensions
-  const outW = _posterW & ~1;
-  const outH = _posterH & ~1;
-  const fps     = 24;
-  const bitrate = 24_000_000;
+  // Read export settings
+  const fps      = parseInt(document.getElementById('exp-fps')?.value)  || 24;
+  const bitrate  = (parseInt(document.getElementById('exp-mbps')?.value) || 48) * 1_000_000;
+  const resScale = (parseInt(document.getElementById('exp-res')?.value)  || 100) / 100;
+
+  // H.264 needs even dimensions
+  const outW = (Math.round(_posterW * resScale)) & ~1;
+  const outH = (Math.round(_posterH * resScale)) & ~1;
   const frameMs = 1000 / fps;
   const totalFrames = Math.ceil(SCATTER_TOTAL_MS / frameMs);
 
-  const h2cOpts = { scale: 1, width: _posterW, height: _posterH, useCORS: true, allowTaint: false, logging: false };
+  const h2cOpts = { scale: resScale, width: _posterW, height: _posterH, useCORS: true, allowTaint: false, logging: false };
 
   let encoder = null, muxer = null;
 
@@ -2656,12 +3089,7 @@ window.downloadPosterMP4 = async function() {
     muxer.finalize();
 
     const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
-    const a = Object.assign(document.createElement('a'), {
-      download: 'scapino-poster.mp4',
-      href: URL.createObjectURL(blob),
-    });
-    a.click();
-    URL.revokeObjectURL(a.href);
+    await _saveBlob(blob, 'scapino-poster.mp4');
 
   } catch(e) {
     console.error(e);
@@ -2719,11 +3147,12 @@ window.downloadPosterPNG = async function() {
     if (url) { pCircle.style.backgroundImage = `url("${url}")`; pCircle.style.backgroundSize = '100% 100%'; pCircle.style.backgroundPosition = '0 0'; }
   }
 
+  const resScalePng = (parseInt(document.getElementById('exp-res')?.value) || 100) / 100;
+
   try {
-    const canvas = await html2canvas(poster, { scale: 2, useCORS: true, allowTaint: false, logging: false, width: _posterW, height: _posterH });
-    canvas.toBlob(blob => {
-      const a = Object.assign(document.createElement('a'), { download: 'scapino-poster.png', href: URL.createObjectURL(blob) });
-      a.click(); URL.revokeObjectURL(a.href);
+    const canvas = await html2canvas(poster, { scale: resScalePng, useCORS: true, allowTaint: false, logging: false, width: _posterW, height: _posterH });
+    canvas.toBlob(async blob => {
+      await _saveBlob(blob, 'scapino-poster.png');
     }, 'image/png');
   } catch(e) {
     alert('Export failed — upload local image files first for full PNG export.');
