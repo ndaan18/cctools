@@ -702,6 +702,8 @@ input[type="color"].tmpl-swatch {
 .p-placeholder > svg { width: 10%; height: auto; min-width: 28px; }
 /* ── Motion scrubber ──────────────────────────────────── */
 .scatter-row { display: flex; gap: 0.5rem; margin-top: 0.625rem; }
+@keyframes scatter-loading-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
+#btn-scatter-play[data-state="loading"] { animation: scatter-loading-pulse 0.7s ease-in-out infinite; cursor: wait; }
 #scatter-scrubber {
   -webkit-appearance: none;
   appearance: none;
@@ -912,23 +914,34 @@ input[type="color"].tmpl-swatch {
       </div>
       <div class="tmpl-section">
         <div class="tmpl-section-title">Colors</div>
-        <div class="tmpl-field">
-          <label class="tmpl-label">Background</label>
-          <div class="tmpl-color-row">
-            <input type="color" class="tmpl-swatch" id="c-bg" value="#fbff2d" oninput="tmplApplyColors('bg')">
-            <input type="text" class="tmpl-hex" id="c-bg-hex" value="#fbff2d" maxlength="7" oninput="tmplSyncHex('bg')">
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          <div style="flex:1;min-width:0">
+            <div class="tmpl-field">
+              <label class="tmpl-label">Background</label>
+              <div class="tmpl-color-row">
+                <input type="color" class="tmpl-swatch" id="c-bg" value="#fbff2d" oninput="tmplApplyColors('bg')">
+                <input type="text" class="tmpl-hex" id="c-bg-hex" value="#fbff2d" maxlength="7" oninput="tmplSyncHex('bg')">
+              </div>
+            </div>
+            <div class="tmpl-field">
+              <label class="tmpl-label">Text</label>
+              <div class="tmpl-color-row">
+                <input type="color" class="tmpl-swatch" id="c-text" value="#fcff2d" oninput="tmplApplyColors('text')">
+                <input type="text" class="tmpl-hex" id="c-text-hex" value="#fcff2d" maxlength="7" oninput="tmplSyncHex('text')">
+              </div>
+            </div>
+            <div class="tmpl-field">
+              <label class="tmpl-label">Logo</label>
+              <div class="tmpl-color-row">
+                <input type="color" class="tmpl-swatch" id="c-logo" value="#fcff2d" oninput="tmplApplyColors('logo')">
+                <input type="text" class="tmpl-hex" id="c-logo-hex" value="#fcff2d" maxlength="7" oninput="tmplSyncHex('logo')">
+              </div>
+            </div>
           </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:0.5rem;margin:-0.2rem 0">
-          <div style="flex:1;height:1px;background:var(--border)"></div>
-          <button id="btn-color-link" class="btn" onclick="tmplToggleColorLink()" title="Link colors together" style="padding:0.2rem 0.5rem;line-height:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
-          <div style="flex:1;height:1px;background:var(--border)"></div>
-        </div>
-        <div class="tmpl-field">
-          <label class="tmpl-label">Text</label>
-          <div class="tmpl-color-row">
-            <input type="color" class="tmpl-swatch" id="c-text" value="#fcff2d" oninput="tmplApplyColors('text')">
-            <input type="text" class="tmpl-hex" id="c-text-hex" value="#fcff2d" maxlength="7" oninput="tmplSyncHex('text')">
+          <div style="display:flex;flex-direction:column;align-items:center;align-self:stretch">
+            <div style="width:1px;flex:1;background:var(--border)"></div>
+            <button id="btn-color-link" class="btn" onclick="tmplToggleColorLink()" title="Link all colors" style="width:28px;height:28px;padding:0;flex-shrink:0;display:flex;align-items:center;justify-content:center;line-height:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
+            <div style="width:1px;flex:1;background:var(--border)"></div>
           </div>
         </div>
       </div>
@@ -940,9 +953,9 @@ input[type="color"].tmpl-swatch {
             <button id="btn-canvas-lock" class="btn" onclick="tmplToggleCanvasLock()" title="Lock aspect ratio" style="padding:0.2rem 0.6rem;font-size:0.7rem">Uniform</button>
           </div>
           <div class="tmpl-color-row">
-            <input type="number" class="tmpl-hex" id="inp-w" value="2160" min="100" max="16000" style="text-align:center" oninput="tmplCanvasWChange()">
+            <input type="text" inputmode="decimal" class="tmpl-hex" id="inp-w" value="2160" style="text-align:center;min-width:0" oninput="tmplCanvasWChange()" onfocus="tmplCanvasFocus()" onchange="tmplCanvasCommit(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
             <span style="color:var(--muted);font-size:0.75rem;flex-shrink:0">×</span>
-            <input type="number" class="tmpl-hex" id="inp-h" value="3240" min="100" max="16000" style="text-align:center" oninput="tmplCanvasHChange()">
+            <input type="text" inputmode="decimal" class="tmpl-hex" id="inp-h" value="3240" style="text-align:center;min-width:0" oninput="tmplCanvasHChange()" onfocus="tmplCanvasFocus()" onchange="tmplCanvasCommit(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
           </div>
         </div>
       </div>
@@ -966,9 +979,9 @@ Rotterdam</textarea>
         <div class="tmpl-field">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
             <label class="tmpl-label">Size</label>
-            <span class="tmpl-label" id="txt-size-val">33px</span>
+            <span class="tmpl-label" id="txt-size-val">66px</span>
           </div>
-          <input type="range" id="txt-size" min="10" max="120" value="33" step="1" oninput="tmplApplyTypography()">
+          <input type="range" id="txt-size" min="10" max="120" value="66" step="1" oninput="tmplApplyTypography()">
         </div>
         <div class="tmpl-field">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
@@ -1502,7 +1515,8 @@ window.switchTab = function(tab) {
 let _scatter    = null;
 let _scatterRAF = null;
 
-function _scatterInit() {
+// Shared setup: restore previous scatter, wrap chars, measure rects, return context
+function _scatterBuildContext() {
   _updateScatterParams();
   if (_scatter) {
     _scatter.originals.forEach(({ col, html }) => {
@@ -1514,39 +1528,31 @@ function _scatterInit() {
   const cols = [...document.querySelectorAll('#poster .p-col')];
   const originals = [], chars = [];
 
-  // 1. Wrap each text character in a bare span (no transform yet)
   cols.forEach((col, colIdx) => {
     originals.push({ col, html: col.innerHTML });
     col.setAttribute('contenteditable', 'false');
     col.innerHTML = col.innerHTML.replace(/(<[^>]*>)|([^<])/g, (_, tag, ch) => {
       if (tag) return tag;
-      if (/\s/.test(ch)) return ch; // leave whitespace as plain text so it doesn't collapse and word-breaks still work
+      if (/\s/.test(ch)) return ch;
       return `<span style="display:inline-block">${ch}</span>`;
     });
     col.querySelectorAll('span').forEach(el => chars.push({ el, dx: 0, dy: 0, colIdx }));
   });
 
-  // 2. Measure rects in element space (divide by poster scale so translate() values match)
   const posterEl   = document.getElementById('poster');
   const posterRect = posterEl.getBoundingClientRect();
-  const S          = posterRect.width / _posterW; // viewport px → element px
+  const S          = posterRect.width / _posterW;
 
   const rects = chars.map(c => {
     const r = c.el.getBoundingClientRect();
-    return {
-      x: (r.left - posterRect.left) / S,
-      y: (r.top  - posterRect.top)  / S,
-      w: r.width  / S,
-      h: r.height / S,
-    };
+    return { x:(r.left-posterRect.left)/S, y:(r.top-posterRect.top)/S, w:r.width/S, h:r.height/S };
   });
 
   const fs      = parseFloat(getComputedStyle(cols[0]).fontSize) || 33;
   const distPct = parseFloat(document.getElementById('scatter-dist').value) / 100;
-  const maxD    = fs * distPct * 2; // slider 0–100 → 0×–2× font-size
+  const maxD    = fs * distPct * 2;
   const N       = chars.length;
 
-  // Resolve a candidate's scatter (t=0) overlaps so the start frame is clean
   function resolveScatter(dxs, dys) {
     const GAP = 1;
     for (let iter = 0; iter < 200; iter++) {
@@ -1554,19 +1560,13 @@ function _scatterInit() {
       for (let i = 0; i < N; i++) {
         for (let j = i + 1; j < N; j++) {
           const ri = rects[i], rj = rects[j];
-          const ix = ri.x + dxs[i], iy = ri.y + dys[i];
-          const jx = rj.x + dxs[j], jy = rj.y + dys[j];
-          const ox = Math.min(ix + ri.w, jx + rj.w) - Math.max(ix, jx);
-          const oy = Math.min(iy + ri.h, jy + rj.h) - Math.max(iy, jy);
+          const ix = ri.x+dxs[i], iy = ri.y+dys[i], jx = rj.x+dxs[j], jy = rj.y+dys[j];
+          const ox = Math.min(ix+ri.w, jx+rj.w) - Math.max(ix, jx);
+          const oy = Math.min(iy+ri.h, jy+rj.h) - Math.max(iy, jy);
           if (ox > 0 && oy > 0) {
             moved = true;
-            if (ox <= oy) {
-              const p = (ox + GAP) / 2;
-              if (ix < jx) { dxs[i] -= p; dxs[j] += p; } else { dxs[i] += p; dxs[j] -= p; }
-            } else {
-              const p = (oy + GAP) / 2;
-              if (iy < jy) { dys[i] -= p; dys[j] += p; } else { dys[i] += p; dys[j] -= p; }
-            }
+            if (ox <= oy) { const p=(ox+GAP)/2; if(ix<jx){dxs[i]-=p;dxs[j]+=p;}else{dxs[i]+=p;dxs[j]-=p;} }
+            else           { const p=(oy+GAP)/2; if(iy<jy){dys[i]-=p;dys[j]+=p;}else{dys[i]+=p;dys[j]-=p;} }
           }
         }
       }
@@ -1574,33 +1574,25 @@ function _scatterInit() {
     }
   }
 
-  // Simulate the actual animation (real easing + per-axis delays) and return
-  // the worst pairwise overlap as a fraction of the smaller glyph's area.
   function evalConfig(dxs, dys, dXs, dYs) {
-    const startMs = SCATTER_HOLD_MS;
-    const endMs   = SCATTER_HOLD_MS + SCATTER_MAX_DELAY_MS + SCATTER_ANIM_MS;
-    const STEPS   = 22;
-    let worst = 0;
+    const startMs = SCATTER_HOLD_MS, endMs = SCATTER_HOLD_MS + SCATTER_MAX_DELAY_MS + SCATTER_ANIM_MS;
+    const STEPS = 22; let worst = 0;
     const px = new Array(N), py = new Array(N);
     for (let s = 0; s < STEPS; s++) {
-      const elapsed = startMs + (s / (STEPS - 1)) * (endMs - startMs);
+      const elapsed = startMs + (s / (STEPS-1)) * (endMs - startMs);
       for (let i = 0; i < N; i++) {
-        const ax = (elapsed - SCATTER_HOLD_MS - dXs[i]) / SCATTER_ANIM_MS;
-        const ay = (elapsed - SCATTER_HOLD_MS - dYs[i]) / SCATTER_ANIM_MS;
-        const tx = _scatterEase(Math.max(0, Math.min(ax, 1)));
-        const ty = _scatterEase(Math.max(0, Math.min(ay, 1)));
-        px[i] = rects[i].x + dxs[i] * (1 - tx);
-        py[i] = rects[i].y + dys[i] * (1 - ty);
+        const tx = _scatterEase(Math.max(0, Math.min((elapsed-SCATTER_HOLD_MS-dXs[i])/SCATTER_ANIM_MS, 1)));
+        const ty = _scatterEase(Math.max(0, Math.min((elapsed-SCATTER_HOLD_MS-dYs[i])/SCATTER_ANIM_MS, 1)));
+        px[i] = rects[i].x + dxs[i]*(1-tx);
+        py[i] = rects[i].y + dys[i]*(1-ty);
       }
       for (let i = 0; i < N; i++) {
         const ri = rects[i];
-        for (let j = i + 1; j < N; j++) {
+        for (let j = i+1; j < N; j++) {
           const rj = rects[j];
-          const ox = Math.min(px[i] + ri.w, px[j] + rj.w) - Math.max(px[i], px[j]);
-          if (ox <= 0) continue;
-          const oy = Math.min(py[i] + ri.h, py[j] + rj.h) - Math.max(py[i], py[j]);
-          if (oy <= 0) continue;
-          const pct = (ox * oy) / Math.min(ri.w * ri.h, rj.w * rj.h);
+          const ox = Math.min(px[i]+ri.w, px[j]+rj.w) - Math.max(px[i], px[j]); if (ox<=0) continue;
+          const oy = Math.min(py[i]+ri.h, py[j]+rj.h) - Math.max(py[i], py[j]); if (oy<=0) continue;
+          const pct = (ox*oy) / Math.min(ri.w*ri.h, rj.w*rj.h);
           if (pct > worst) worst = pct;
         }
       }
@@ -1608,43 +1600,77 @@ function _scatterInit() {
     return worst;
   }
 
-  // 3. Try random seeds, keep the best one (or stop early under threshold)
-  const TARGET    = 0.05;  // ≤ 1 % overlap target
-  const MAX_TRIES = 10000;
-  let bestDx = null, bestDy = null, bestDX = null, bestDY = null, bestScore = Infinity;
+  return { chars, originals, rects, N, maxD, resolveScatter, evalConfig };
+}
 
-  for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
-    const dxs = new Array(N), dys = new Array(N);
-    const dXs = new Array(N), dYs = new Array(N);
-    for (let i = 0; i < N; i++) {
-      dxs[i] = (Math.random() * 2 - 1) * maxD;
-      dys[i] = (Math.random() * 2 - 1) * maxD * 0.7;
-      dXs[i] = Math.random() * SCATTER_MAX_DELAY_MS;
-      dYs[i] = Math.random() * SCATTER_MAX_DELAY_MS;
-    }
-    resolveScatter(dxs, dys);
-    const score = evalConfig(dxs, dys, dXs, dYs);
-    if (score < bestScore) {
-      bestScore = score;
-      bestDx = dxs; bestDy = dys; bestDX = dXs; bestDY = dYs;
-    }
-    if (score <= TARGET) break;
-  }
-
-  // 4. Apply the chosen config
-  const colOrder = [0, 2, 1]; // stagger rank per colIdx: 0→first, 1→third, 2→second
+// Apply the winning seed config to the DOM
+function _scatterApplyConfig({ chars, originals, N }, bestDx, bestDy, bestDX, bestDY) {
+  const colOrder = [0, 2, 1];
   for (let i = 0; i < N; i++) {
-    const staggerRank = colOrder[chars[i].colIdx] ?? chars[i].colIdx;
+    const r = colOrder[chars[i].colIdx] ?? chars[i].colIdx;
     chars[i].dx             = bestDx[i];
     chars[i].dy             = bestDy[i];
-    chars[i].delayX         = bestDX[i] + staggerRank * SCATTER_COL_STAGGER;
-    chars[i].delayY         = bestDY[i] + staggerRank * SCATTER_COL_STAGGER;
-    chars[i].opacityToggleMs = staggerRank * SCATTER_COL_STAGGER + SCATTER_ANIM_MS / 2 + Math.random() * (SCATTER_ANIM_MS);
+    chars[i].delayX         = bestDX[i] + r * SCATTER_COL_STAGGER;
+    chars[i].delayY         = bestDY[i] + r * SCATTER_COL_STAGGER;
+    chars[i].opacityToggleMs = r * SCATTER_COL_STAGGER + SCATTER_ANIM_MS / 2 + Math.random() * SCATTER_ANIM_MS;
     chars[i].el.style.opacity   = '0';
     chars[i].el.style.transform = `translate(${bestDx[i].toFixed(1)}px,${bestDy[i].toFixed(1)}px)`;
   }
-
   _scatter = { spans: chars, originals };
+}
+
+// Sync init (used by scrubber when _scatter is null)
+function _scatterInit() {
+  const ctx = _scatterBuildContext();
+  const { N, maxD, resolveScatter, evalConfig } = ctx;
+  const TARGET = 0.05, MAX_TRIES = 10000;
+  let bestDx = null, bestDy = null, bestDX = null, bestDY = null, bestScore = Infinity;
+  for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
+    const dxs = new Array(N), dys = new Array(N), dXs = new Array(N), dYs = new Array(N);
+    for (let i = 0; i < N; i++) {
+      dxs[i] = (Math.random()*2-1)*maxD; dys[i] = (Math.random()*2-1)*maxD*0.7;
+      dXs[i] = Math.random()*SCATTER_MAX_DELAY_MS; dYs[i] = Math.random()*SCATTER_MAX_DELAY_MS;
+    }
+    resolveScatter(dxs, dys);
+    const score = evalConfig(dxs, dys, dXs, dYs);
+    if (score < bestScore) { bestScore = score; bestDx=dxs; bestDy=dys; bestDX=dXs; bestDY=dYs; }
+    if (score <= TARGET) break;
+  }
+  _scatterApplyConfig(ctx, bestDx, bestDy, bestDX, bestDY);
+}
+
+// Async init with per-frame progress updates (used by Play button)
+function _scatterInitAsync(onDone) {
+  const ctx = _scatterBuildContext();
+  const { N, maxD, resolveScatter, evalConfig } = ctx;
+  const TARGET = 0.05, MAX_TRIES = 10000, CHUNK = 150;
+  let attempt = 0, bestScore = Infinity;
+  let bestDx = null, bestDy = null, bestDX = null, bestDY = null;
+
+  function runChunk() {
+    const end = Math.min(attempt + CHUNK, MAX_TRIES);
+    while (attempt < end) {
+      const dxs = new Array(N), dys = new Array(N), dXs = new Array(N), dYs = new Array(N);
+      for (let i = 0; i < N; i++) {
+        dxs[i] = (Math.random()*2-1)*maxD; dys[i] = (Math.random()*2-1)*maxD*0.7;
+        dXs[i] = Math.random()*SCATTER_MAX_DELAY_MS; dYs[i] = Math.random()*SCATTER_MAX_DELAY_MS;
+      }
+      resolveScatter(dxs, dys);
+      const score = evalConfig(dxs, dys, dXs, dYs);
+      if (score < bestScore) { bestScore = score; bestDx=dxs; bestDy=dys; bestDX=dXs; bestDY=dYs; }
+      attempt++;
+      if (score <= TARGET) break;
+    }
+    const pct = Math.round(Math.min(attempt / MAX_TRIES, 1) * 100);
+    _scatterBtn(`◌ ${pct}%`, 'loading');
+    if (attempt < MAX_TRIES && bestScore > TARGET) {
+      requestAnimationFrame(runChunk);
+    } else {
+      _scatterApplyConfig(ctx, bestDx, bestDy, bestDX, bestDY);
+      onDone();
+    }
+  }
+  requestAnimationFrame(runChunk);
 }
 
 // Timeline — mutable so sliders can update them before each init
@@ -1697,6 +1723,22 @@ function _scatterBtn(label, state) {
   b.dataset.state = state;
 }
 
+function _startPlayback() {
+  const scrubber = document.getElementById('scatter-scrubber');
+  _scatterBtn('◼ Stop', 'playing');
+  const startElapsed = (parseFloat(scrubber.value) / 100) * SCATTER_TOTAL_MS;
+  const t0 = performance.now() - startElapsed;
+  function tick(now) {
+    const elapsed = now - t0;
+    const scrubProgress = Math.min(elapsed / SCATTER_TOTAL_MS, 1);
+    _scatterApplyElapsed(elapsed);
+    scrubber.value = scrubProgress * 100;
+    if (scrubProgress < 1) { _scatterRAF = requestAnimationFrame(tick); }
+    else { _scatterRAF = null; _scatterBtn('↺ Replay', 'done'); }
+  }
+  _scatterRAF = requestAnimationFrame(tick);
+}
+
 window.scatterPlay = function() {
   const scrubber = document.getElementById('scatter-scrubber');
   const b        = document.getElementById('btn-scatter-play');
@@ -1708,29 +1750,16 @@ window.scatterPlay = function() {
     _scatterBtn(val >= 100 ? '↺ Replay' : '▶ Play', val >= 100 ? 'done' : 'paused');
     return;
   }
+  if (state === 'loading') return;
 
   const isNew = (!_scatter || state === 'done');
-  if (isNew) { _scatterInit(); _scatterApplyElapsed(0); scrubber.value = 0; }
-
-  _scatterBtn('◼ Stop', 'playing');
-
-  // Offset start time so playback resumes from current scrubber position
-  const startElapsed = (parseFloat(scrubber.value) / 100) * SCATTER_TOTAL_MS;
-  const t0 = performance.now() - startElapsed;
-
-  function tick(now) {
-    const elapsed       = now - t0;
-    const scrubProgress = Math.min(elapsed / SCATTER_TOTAL_MS, 1);
-    _scatterApplyElapsed(elapsed);
-    scrubber.value = scrubProgress * 100;
-    if (scrubProgress < 1) {
-      _scatterRAF = requestAnimationFrame(tick);
-    } else {
-      _scatterRAF = null;
-      _scatterBtn('↺ Replay', 'done');
-    }
+  if (isNew) {
+    _scatterBtn('◌ 0%', 'loading');
+    scrubber.value = 0;
+    _scatterInitAsync(() => { _scatterApplyElapsed(0); _startPlayback(); });
+  } else {
+    _startPlayback();
   }
-  _scatterRAF = requestAnimationFrame(tick);
 };
 
 window.scatterScrub = function(val) {
@@ -1809,6 +1838,7 @@ function _captureState() {
     kerning:     document.getElementById('txt-kerning')?.value ?? '-0.03',
     bg:          document.getElementById('c-bg')?.value        ?? '#fbff2d',
     tc:          document.getElementById('c-text')?.value      ?? '#fcff2d',
+    logo:        document.getElementById('c-logo')?.value      ?? '#fcff2d',
     w:           document.getElementById('inp-w')?.value       ?? '2160',
     h:           document.getElementById('inp-h')?.value       ?? '3240',
     topSrc:      topImg?.getAttribute('src')    ?? '',
@@ -1846,6 +1876,7 @@ function _applyState(s) {
     document.getElementById('txt-kerning').value = s.kerning;
     document.getElementById('c-bg').value   = s.bg;
     document.getElementById('c-text').value = s.tc;
+    document.getElementById('c-logo').value = s.logo ?? s.tc;
     document.getElementById('inp-w').value  = s.w;
     document.getElementById('inp-h').value  = s.h;
     updatePosterSizing();
@@ -1921,15 +1952,21 @@ window.tmplToggleColorLink = function() {
 
 window.tmplApplyColors = function(which) {
   _pushUndo();
-  let bg = document.getElementById('c-bg').value;
-  let tc = document.getElementById('c-text').value;
-  if (_colorsLinked && which === 'bg')   { tc = bg; document.getElementById('c-text').value = tc; }
-  if (_colorsLinked && which === 'text') { bg = tc; document.getElementById('c-bg').value   = bg; }
+  let bg   = document.getElementById('c-bg').value;
+  let tc   = document.getElementById('c-text').value;
+  let logo = document.getElementById('c-logo').value;
+  if (_colorsLinked && which === 'bg')   { tc = bg;   logo = bg;   }
+  if (_colorsLinked && which === 'text') { bg = tc;   logo = tc;   }
+  if (_colorsLinked && which === 'logo') { bg = logo; tc   = logo; }
+  document.getElementById('c-bg').value   = bg;
+  document.getElementById('c-text').value = tc;
+  document.getElementById('c-logo').value = logo;
   document.getElementById('poster').style.background = bg;
   document.querySelectorAll('.p-title, .p-col').forEach(el => el.style.color = tc);
-  document.getElementById('p-logo-svg').style.color = tc;
+  document.getElementById('p-logo-svg').style.color = logo;
   document.getElementById('c-bg-hex').value   = bg;
   document.getElementById('c-text-hex').value = tc;
+  document.getElementById('c-logo-hex').value = logo;
 };
 window.tmplSyncHex = function(which) {
   const hex = document.getElementById('c-' + which + '-hex').value;
@@ -1963,6 +2000,42 @@ window.tmplCanvasHChange = function() {
     document.getElementById('inp-w').value = Math.round(h / _canvasAspect);
   }
   updatePosterSizing();
+};
+
+// Evaluate a math expression like "1080*2" safely (digits, + - * / ( ) . only)
+function _evalMath(str) {
+  const s = String(str).trim();
+  if (!s) return NaN;
+  if (!/^[\d+\-*/().\s]+$/.test(s)) return NaN;
+  try { return Function('"use strict";return (' + s + ')')(); }
+  catch { return NaN; }
+}
+
+// Scale font slider proportionally when the canvas size is committed (on blur / Enter / spinner / wheel)
+let _canvasMinAtFocus = 2160;
+window.tmplCanvasFocus = function() {
+  _canvasMinAtFocus = Math.min(_posterW, _posterH);
+};
+window.tmplCanvasCommit = function(inp) {
+  if (inp) {
+    const result = _evalMath(inp.value);
+    if (isFinite(result) && result > 0) {
+      inp.value = Math.max(100, Math.min(16000, Math.round(result)));
+    } else {
+      inp.value = inp.id === 'inp-w' ? _posterW : _posterH;
+    }
+    if (inp.id === 'inp-w') tmplCanvasWChange();
+    else                    tmplCanvasHChange();
+  }
+  const newMin = Math.min(_posterW, _posterH);
+  if (!_canvasMinAtFocus || newMin === _canvasMinAtFocus) return;
+  const sizeInput = document.getElementById('txt-size');
+  if (sizeInput) {
+    const scaled = parseFloat(sizeInput.value) * (newMin / _canvasMinAtFocus);
+    sizeInput.value = Math.max(1, Math.round(scaled));
+    tmplApplyTypography();
+  }
+  _canvasMinAtFocus = newMin;
 };
 
 // ── Background uploads ───────────────────────────────────
