@@ -480,8 +480,8 @@ body {
 }
 .tab-btn.active { color: var(--text); border-bottom-color: var(--text); }
 
-/* ── Template tab ─────────────────────────────────────── */
-#tab-template {
+/* ── Poster tabs (Design / Motion / Export) ───────────── */
+#tab-poster {
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -556,6 +556,9 @@ body {
 .p-top.has-media .p-frame-handle,
 .p-circle.has-media .p-frame-handle { pointer-events: auto; }
 .p-frame-handle.dragging { cursor: grabbing; }
+#poster.poster-locked .p-frame-handle { pointer-events: none !important; cursor: default; }
+#poster.poster-locked .p-col[contenteditable] { pointer-events: none; user-select: none; cursor: default; }
+#poster.design-view .p-col span { transform: none !important; opacity: 1 !important; }
 .p-logo {
   width: 100%;
   height: auto;
@@ -794,11 +797,13 @@ input[type="color"].tmpl-swatch {
   </div>
 
   <div class="tab-bar">
-    <button class="tab-btn active" id="tbtn-speedtrace" onclick="switchTab('speedtrace')">SpeedTrace</button>
-    <button class="tab-btn" id="tbtn-template" onclick="switchTab('template')">Template</button>
+    <button class="tab-btn active" id="tbtn-design" onclick="switchTab('design')">Design</button>
+    <button class="tab-btn" id="tbtn-speedtrace" onclick="switchTab('speedtrace')">SpeedTrace</button>
+    <button class="tab-btn" id="tbtn-motion" onclick="switchTab('motion')">Motion</button>
+    <button class="tab-btn" id="tbtn-export" onclick="switchTab('export')">Export</button>
   </div>
 
-  <div class="app-main" id="tab-speedtrace">
+  <div class="app-main" id="tab-speedtrace" style="display:none">
 
     <div class="panel-left">
       <div id="dropzone">
@@ -864,7 +869,7 @@ input[type="color"].tmpl-swatch {
 
   </div>
 
-  <div id="tab-template" style="display:none">
+  <div id="tab-poster" style="display:grid">
     <div class="tmpl-preview">
       <div id="poster-wrap">
         <div id="poster">
@@ -912,7 +917,8 @@ input[type="color"].tmpl-swatch {
         </div>
       </div>
     </div>
-    <div class="tmpl-edit">
+    <!-- Design panel -->
+    <div id="panel-design" class="tmpl-edit">
       <div class="panel-header" style="display:flex;align-items:center;justify-content:space-between">
         <div class="panel-header-title">Design</div>
         <div style="display:flex;gap:0.25rem">
@@ -1027,6 +1033,11 @@ Rotterdam</textarea>
           <input type="file" id="up-circle-bg" style="display:none" accept="image/*,video/*" onchange="tmplLoadCircleBg(this)">
         </div>
       </div>
+    </div><!-- /panel-design -->
+
+    <!-- Motion panel -->
+    <div id="panel-motion" class="tmpl-edit" style="display:none">
+      <div class="panel-header"><div class="panel-header-title">Motion</div></div>
       <div class="tmpl-section">
         <div class="tmpl-section-title">Motion Preview</div>
         <div class="tmpl-field">
@@ -1091,14 +1102,19 @@ Rotterdam</textarea>
             <button class="btn" onclick="scatterReset()">Reset</button>
           </div>
         </div>
-      </div>
+      </div><!-- /tmpl-section Motion Preview -->
+    </div><!-- /panel-motion -->
+
+    <!-- Export panel -->
+    <div id="panel-export" class="tmpl-edit" style="display:none">
+      <div class="panel-header"><div class="panel-header-title">Export</div></div>
       <div class="panel-footer">
         <button class="btn btn-dl" id="btn-dl-mp4" style="width:100%" onclick="downloadPosterMP4()">↓ Download MP4</button>
         <button class="btn" style="width:100%;margin-top:0.4rem;font-size:0.7rem" onclick="downloadPosterPNG()">↓ Download Still</button>
         <div style="margin-top:0.5rem;font-size:0.625rem;color:var(--muted);line-height:1.6">Upload local files for<br>best export quality.</div>
       </div>
-    </div>
-  </div>
+    </div><!-- /panel-export -->
+  </div><!-- /tab-poster -->
 
 </div>
 
@@ -1131,6 +1147,9 @@ Rotterdam</textarea>
   }
   document.addEventListener('DOMContentLoaded', function () {
     applySquircle(document.getElementById('app'), 24);
+    const p = document.getElementById('poster');
+    if (p) p.classList.add('design-view');
+    setTimeout(updatePosterSizing, 50);
   });
 }());
 </script>
@@ -1518,14 +1537,38 @@ let _posterW = 2160, _posterH = 3240;
 
 // ── Tab switching ────────────────────────────────────────
 window.switchTab = function(tab) {
-  ['speedtrace','template'].forEach(t => {
+  ['design','speedtrace','motion','export'].forEach(t => {
     document.getElementById('tbtn-'+t).classList.toggle('active', t===tab);
   });
   const st = document.getElementById('tab-speedtrace');
-  const tt = document.getElementById('tab-template');
+  const tp = document.getElementById('tab-poster');
   st.style.display = tab==='speedtrace' ? '' : 'none';
-  tt.style.display = tab==='template' ? 'grid' : 'none';
-  if (tab==='template') setTimeout(updatePosterSizing, 30);
+  tp.style.display = tab==='speedtrace' ? 'none' : 'grid';
+  if (tab !== 'speedtrace') {
+    ['design','motion','export'].forEach(p => {
+      document.getElementById('panel-'+p).style.display = p===tab ? '' : 'none';
+    });
+    const poster = document.getElementById('poster');
+    if (poster) {
+      const locked = tab !== 'design';
+      poster.classList.toggle('poster-locked', locked);
+      poster.querySelectorAll('.p-col[contenteditable]').forEach(el => {
+        el.setAttribute('contenteditable', locked ? 'false' : 'true');
+      });
+    }
+    const poster2 = document.getElementById('poster');
+    if (poster2) poster2.classList.toggle('design-view', tab === 'design');
+    if (tab === 'design') {
+      _pauseVideos();
+      _seekVideosTo(0);
+    } else {
+      const scrubber = document.getElementById('scatter-scrubber');
+      const elapsed = scrubber ? (parseFloat(scrubber.value) / 100) * SCATTER_TOTAL_MS : 0;
+      if (_scatter) _scatterApplyElapsed(elapsed);
+      _seekVideosTo(elapsed);
+    }
+    setTimeout(updatePosterSizing, 30);
+  }
 };
 
 // ── p-info scatter preview ───────────────────────────────
@@ -1916,7 +1959,7 @@ window.tmplResetCanvasView = function() {
   scalePoster();
 };
 window.addEventListener('resize', function() {
-  if (document.getElementById('tab-template').style.display !== 'none') scalePoster();
+  if (document.getElementById('tab-poster').style.display !== 'none') scalePoster();
 });
 
 // Space-key tracking — when held, left-mouse drags pan the canvas
