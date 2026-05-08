@@ -1982,11 +1982,15 @@ function _scatterInit() {
   const { N, maxD, resolveScatter, evalConfig } = ctx;
   const TARGET = 0.05, MAX_TRIES = 10000;
   let bestDx = null, bestDy = null, bestDX = null, bestDY = null, bestScore = Infinity;
+  // Per-character random start delay scales with ANIM so the scatter phase
+  // stretches with the Animate slider (mirroring how opacity reveal stretches).
+  // Char delay acts as a relative multiplier (default 500ms = 1×).
+  const delayScale = SCATTER_ANIM_MS * (SCATTER_MAX_DELAY_MS / 500);
   for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
     const dxs = new Array(N), dys = new Array(N), dXs = new Array(N), dYs = new Array(N);
     for (let i = 0; i < N; i++) {
       dxs[i] = (Math.random()*2-1)*maxD; dys[i] = (Math.random()*2-1)*maxD*0.7;
-      dXs[i] = Math.random()*SCATTER_MAX_DELAY_MS; dYs[i] = Math.random()*SCATTER_MAX_DELAY_MS;
+      dXs[i] = Math.random()*delayScale; dYs[i] = Math.random()*delayScale;
     }
     resolveScatter(dxs, dys);
     const score = evalConfig(dxs, dys, dXs, dYs);
@@ -2004,13 +2008,15 @@ function _scatterInitAsync(onDone) {
   let attempt = 0, bestScore = Infinity;
   let bestDx = null, bestDy = null, bestDX = null, bestDY = null;
 
+  // Per-character random start delay scales with ANIM (see _scatterInit for rationale).
+  const delayScale = SCATTER_ANIM_MS * (SCATTER_MAX_DELAY_MS / 500);
   function runChunk() {
     const end = Math.min(attempt + CHUNK, MAX_TRIES);
     while (attempt < end) {
       const dxs = new Array(N), dys = new Array(N), dXs = new Array(N), dYs = new Array(N);
       for (let i = 0; i < N; i++) {
         dxs[i] = (Math.random()*2-1)*maxD; dys[i] = (Math.random()*2-1)*maxD*0.7;
-        dXs[i] = Math.random()*SCATTER_MAX_DELAY_MS; dYs[i] = Math.random()*SCATTER_MAX_DELAY_MS;
+        dXs[i] = Math.random()*delayScale; dYs[i] = Math.random()*delayScale;
       }
       resolveScatter(dxs, dys);
       const score = evalConfig(dxs, dys, dXs, dYs);
