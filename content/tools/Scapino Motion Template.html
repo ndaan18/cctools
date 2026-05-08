@@ -541,7 +541,7 @@ body {
   height: 100%;
   object-fit: cover;
   object-position: var(--frame-x, 50%) var(--frame-y, 50%);
-  transform: scale(var(--frame-s, 1));
+  transform: rotate(var(--frame-r, 0deg)) scale(var(--frame-s, 1));
   transform-origin: var(--frame-x, 50%) var(--frame-y, 50%);
   pointer-events: none;
 }
@@ -877,7 +877,7 @@ input[type="color"].tmpl-swatch {
             <img class="p-bg p-bg-img" id="p-photo-top" data-empty alt="">
             <video class="p-bg p-bg-video" id="p-video-top" data-empty muted playsinline preload="auto"></video>
             <div class="p-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
-            <div class="p-frame-handle" data-frame-target="top" title="Drag to pan • Double-click to reset"></div>
+            <div class="p-frame-handle" data-frame-target="top" title="Drag to pan • Ctrl+drag to rotate • Scroll to zoom • Double-click to reset"></div>
             <svg class="p-logo" id="p-logo-svg" viewBox="0 0 669 222" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M271.574 154H283.521C289.348 154 292.095 157.08 292.095 161.326C292.095 164.115 290.847 166.446 288.016 167.32C291.221 168.236 292.97 170.692 292.97 173.73C293.011 178.808 289.223 181.68 284.062 181.68H271.574V154ZM277.36 158.995V165.364H282.563C285.602 165.364 286.226 163.574 286.226 161.867C286.226 160.077 285.061 158.995 282.605 158.995H277.36ZM277.36 170.067V176.685H283.437C286.434 176.685 287.142 175.062 287.142 173.231C287.1 171.149 285.727 170.067 283.354 170.067H277.36Z" fill="currentColor"/>
               <path d="M314.348 181.68L312.6 176.352H300.654L298.906 181.68H292.995L302.444 154H310.852L320.259 181.68H314.348ZM302.277 171.316H310.935L306.606 158.121L302.277 171.316Z" fill="currentColor"/>
@@ -907,7 +907,7 @@ input[type="color"].tmpl-swatch {
             <img class="p-bg p-bg-img" id="p-photo-circle" data-empty alt="">
             <video class="p-bg p-bg-video" id="p-video-circle" data-empty muted playsinline preload="auto"></video>
             <div class="p-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
-            <div class="p-frame-handle" data-frame-target="circle" title="Drag to pan • Double-click to reset"></div>
+            <div class="p-frame-handle" data-frame-target="circle" title="Drag to pan • Ctrl+drag to rotate • Scroll to zoom • Double-click to reset"></div>
             <div class="p-info">
               <div class="p-col" contenteditable spellcheck="false" oninput="tmplSyncColToSidebar(0)">Origin: The Future<br>is Feminine</div>
               <div class="p-col" contenteditable spellcheck="false" oninput="tmplSyncColToSidebar(1)">17 01 26<br>19 03 26</div>
@@ -1435,14 +1435,20 @@ function drawSkeleton(lm,w,h) {
 }
 
 // ── File handling ──────────────────────────────────────────────────
+// 'manual' = user loaded via file picker / drag-drop; 'design' = auto-forwarded
+// from the design tab. Used by the design tab to decide whether to prompt.
+window._speedTraceVideoSource = 'none';
+
 dz.addEventListener('click',()=>fi.click());
-fi.addEventListener('change',e=>e.target.files[0]&&loadVideo(e.target.files[0]));
+fi.addEventListener('change',e=>{
+  if(e.target.files[0]){ window._speedTraceVideoSource='manual'; loadVideo(e.target.files[0]); }
+});
 dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over');});
 dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
 dz.addEventListener('drop',e=>{
   e.preventDefault();dz.classList.remove('drag-over');
   const f=e.dataTransfer.files[0];
-  if(f&&f.type.startsWith('video/'))loadVideo(f);
+  if(f&&f.type.startsWith('video/')){ window._speedTraceVideoSource='manual'; loadVideo(f); }
 });
 
 function loadVideo(file) {
@@ -1459,6 +1465,12 @@ function loadVideo(file) {
     _('meta-duration').textContent=wv.duration.toFixed(2)+'s';
   },{once:true});
 }
+// Expose to non-module scripts (e.g. design tab forwarding videos here).
+// Sets source to 'design' so the manual-override prompt is not triggered.
+window.loadVideo = function(file) {
+  window._speedTraceVideoSource = 'design';
+  loadVideo(file);
+};
 
 // ── Processing ─────────────────────────────────────────────────────
 window.startProcessing = async function() {
@@ -1562,7 +1574,8 @@ window.downloadCSV = function() {
 // ── Reset ──────────────────────────────────────────────────────────
 window.resetTool = function() {
   videoFile=null; frameData=[]; csvContent=null; mgjsonBlob=null;
-  wv.src=''; dz.style.display=''; pw.classList.remove('active');
+  window._speedTraceVideoSource = 'none';
+  fi.value=''; wv.src=''; dz.style.display=''; pw.classList.remove('active');
   prw.classList.remove('active'); pb.style.width='0%';
   bP.disabled=true; bM.style.display='none'; bC.style.display='none'; bR.style.display='none';
   setStatus('idle','Ready — drop a video'); buildStreamUI();
@@ -2128,8 +2141,8 @@ function _captureState() {
     topVidEmpty:    topVid?.hasAttribute('data-empty') ?? true,
     circleVidSrc:   circleVid?.getAttribute('src') ?? '',
     circleVidEmpty: circleVid?.hasAttribute('data-empty') ?? true,
-    frameTop:       (typeof _framing !== 'undefined') ? { ..._framing.top }    : { x:50,y:50,scale:1 },
-    frameCircle:    (typeof _framing !== 'undefined') ? { ..._framing.circle } : { x:50,y:50,scale:1 },
+    frameTop:       (typeof _framing !== 'undefined') ? { ..._framing.top }    : { x:50,y:50,scale:1,rotation:0 },
+    frameCircle:    (typeof _framing !== 'undefined') ? { ..._framing.circle } : { x:50,y:50,scale:1,rotation:0 },
   };
 }
 
@@ -2191,8 +2204,8 @@ function _applyState(s) {
     _restoreMedia('p-photo-circle', 'p-video-circle', 'slot-circle', 'slot-circle-label',
                   s.circleSrc, s.circleEmpty, s.circleVidSrc ?? '', s.circleVidEmpty ?? true);
     if (typeof _framing !== 'undefined') {
-      _framing.top    = s.frameTop    ? { ...s.frameTop }    : { x:50,y:50,scale:1 };
-      _framing.circle = s.frameCircle ? { ...s.frameCircle } : { x:50,y:50,scale:1 };
+      _framing.top    = s.frameTop    ? { ...s.frameTop }    : { x:50,y:50,scale:1,rotation:0 };
+      _framing.circle = s.frameCircle ? { ...s.frameCircle } : { x:50,y:50,scale:1,rotation:0 };
       tmplApplyFraming('top');
       tmplApplyFraming('circle');
       _setHasMedia('top',    !(s.topEmpty    && (s.topVidEmpty    ?? true)));
@@ -2546,6 +2559,18 @@ window.downloadPosterPrint = async function() {
         const dX = (_framing.top.x / 100) * (_posterW - dW);
         const dY = (_framing.top.y / 100) * (topH - dH);
 
+        const rotation = _framing.top.rotation || 0;
+
+        // Helper: rotate canvas around the framing focal point (matches CSS transform-origin)
+        function _applyTopRotation() {
+          if (!rotation) return;
+          const rx = px0 + (_framing.top.x / 100) * pW;
+          const ry = py0 + (_framing.top.y / 100) * topH;
+          ctx.translate(rx, ry);
+          ctx.rotate(rotation * Math.PI / 180);
+          ctx.translate(-rx, -ry);
+        }
+
         // ── Top bleed band (above poster) ──────────────────────────────────
         // Clip extends 1px into the poster so any subpixel yellow seam at the
         // top of the html2canvas capture is covered by real source content.
@@ -2553,53 +2578,53 @@ window.downloadPosterPrint = async function() {
         ctx.beginPath();
         ctx.rect(px0 - bleedPx, py0 - bleedPx, pW + 2 * bleedPx, bleedPx + 1);
         ctx.clip();
+        _applyTopRotation();
         ctx.drawImage(topSrc, px0 + dX, py0 + dY, dW, dH);
         ctx.restore();
 
-        // Source-y slice for the bleed band (+1px to match the extended clip)
-        const sYb0 = Math.max(0, (-bleedPx - dY) * topSrcH / dH);
-        const sYb1 = Math.min(topSrcH, (1 - dY) * topSrcH / dH);
-        const sHb  = Math.max(1, Math.ceil(sYb1 - sYb0));
-
-        // Fill corner gaps where image doesn't reach horizontally (bleed band)
-        const leftGapW = Math.max(0, Math.ceil(dX + bleedPx));
-        if (leftGapW > 0)
-          ctx.drawImage(topSrc, 0, sYb0, 1, sHb, px0 - bleedPx, py0 - bleedPx, leftGapW, bleedPx + 1);
-        const rightEdgeX = px0 + dX + dW;
-        const rightGapW  = Math.max(0, Math.ceil(px0 + pW + bleedPx - rightEdgeX));
-        if (rightGapW > 0)
-          ctx.drawImage(topSrc, topSrcW - 1, sYb0, 1, sHb, Math.floor(rightEdgeX), py0 - bleedPx, rightGapW + 1, bleedPx + 1);
-
-        // ── Side bleeds alongside the top image ────────────────────────────
-        // Source-y slice for the full top-section height
-        const sYs0 = Math.max(0, (0 - dY) * topSrcH / dH);
-        const sYs1 = Math.min(topSrcH, (topH - dY) * topSrcH / dH);
-        const sHs  = Math.max(1, Math.ceil(sYs1 - sYs0));
-        const imgX0 = px0 + dX, imgX1 = px0 + dX + dW;
-        const xScale = topSrcW / dW;
-
-        // Left bleed strip — use actual source content where image overlaps, pixel-stretch elsewhere
-        {
-          const bX0 = px0 - bleedPx, bX1 = px0;
-          const ovX0 = Math.min(bX1, Math.max(bX0, imgX0));
-          const ovX1 = Math.max(bX0, Math.min(bX1, imgX1));
-          if (ovX1 > ovX0)
-            ctx.drawImage(topSrc, (ovX0 - imgX0) * xScale, sYs0, (ovX1 - ovX0) * xScale, sHs,
-                          ovX0, py0, ovX1 - ovX0, topH);
-          if (ovX0 > bX0) ctx.drawImage(topSrc, 0,           sYs0, 1, sHs, bX0,  py0, ovX0 - bX0, topH);
-          if (ovX1 < bX1) ctx.drawImage(topSrc, topSrcW - 1, sYs0, 1, sHs, ovX1, py0, bX1 - ovX1, topH);
+        // Corner gap fills (pixel-stretch, only meaningful when not rotated)
+        if (!rotation) {
+          const sYb0 = Math.max(0, (-bleedPx - dY) * topSrcH / dH);
+          const sYb1 = Math.min(topSrcH, (1 - dY) * topSrcH / dH);
+          const sHb  = Math.max(1, Math.ceil(sYb1 - sYb0));
+          const leftGapW = Math.max(0, Math.ceil(dX + bleedPx));
+          if (leftGapW > 0)
+            ctx.drawImage(topSrc, 0, sYb0, 1, sHb, px0 - bleedPx, py0 - bleedPx, leftGapW, bleedPx + 1);
+          const rightEdgeX = px0 + dX + dW;
+          const rightGapW  = Math.max(0, Math.ceil(px0 + pW + bleedPx - rightEdgeX));
+          if (rightGapW > 0)
+            ctx.drawImage(topSrc, topSrcW - 1, sYb0, 1, sHb, Math.floor(rightEdgeX), py0 - bleedPx, rightGapW + 1, bleedPx + 1);
         }
 
-        // Right bleed strip — same approach
-        {
-          const bX0 = px0 + pW, bX1 = px0 + pW + bleedPx;
-          const ovX0 = Math.min(bX1, Math.max(bX0, imgX0));
-          const ovX1 = Math.max(bX0, Math.min(bX1, imgX1));
-          if (ovX1 > ovX0)
-            ctx.drawImage(topSrc, (ovX0 - imgX0) * xScale, sYs0, (ovX1 - ovX0) * xScale, sHs,
-                          ovX0, py0, ovX1 - ovX0, topH);
-          if (ovX0 > bX0) ctx.drawImage(topSrc, 0,           sYs0, 1, sHs, bX0,  py0, ovX0 - bX0, topH);
-          if (ovX1 < bX1) ctx.drawImage(topSrc, topSrcW - 1, sYs0, 1, sHs, ovX1, py0, bX1 - ovX1, topH);
+        // ── Side bleeds alongside the top image ────────────────────────────
+        if (rotation) {
+          // Rotated: canvas-clip approach — draw rotated image into each strip
+          [px0 - bleedPx, px0 + pW].forEach(bX => {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(bX, py0, bleedPx, topH);
+            ctx.clip();
+            _applyTopRotation();
+            ctx.drawImage(topSrc, px0 + dX, py0 + dY, dW, dH);
+            ctx.restore();
+          });
+        } else {
+          // Non-rotated: source-mapped with actual content + pixel-stretch fallback
+          const sYs0 = Math.max(0, (0 - dY) * topSrcH / dH);
+          const sYs1 = Math.min(topSrcH, (topH - dY) * topSrcH / dH);
+          const sHs  = Math.max(1, Math.ceil(sYs1 - sYs0));
+          const imgX0 = px0 + dX, imgX1 = px0 + dX + dW;
+          const xScale = topSrcW / dW;
+
+          [{ bX0: px0 - bleedPx, bX1: px0 }, { bX0: px0 + pW, bX1: px0 + pW + bleedPx }].forEach(({ bX0, bX1 }) => {
+            const ovX0 = Math.min(bX1, Math.max(bX0, imgX0));
+            const ovX1 = Math.max(bX0, Math.min(bX1, imgX1));
+            if (ovX1 > ovX0)
+              ctx.drawImage(topSrc, (ovX0 - imgX0) * xScale, sYs0, (ovX1 - ovX0) * xScale, sHs,
+                            ovX0, py0, ovX1 - ovX0, topH);
+            if (ovX0 > bX0) ctx.drawImage(topSrc, 0,           sYs0, 1, sHs, bX0,  py0, ovX0 - bX0, topH);
+            if (ovX1 < bX1) ctx.drawImage(topSrc, topSrcW - 1, sYs0, 1, sHs, ovX1, py0, bX1 - ovX1, topH);
+          });
         }
 
         topFromImage = true;
@@ -2717,6 +2742,22 @@ function _clearVideo(vid) {
   try { vid.load(); } catch(_) {}
   vid.setAttribute('data-empty', '');
 }
+// Tracks the currently loaded video File for each design slot so we can
+// forward the right one to SpeedTrace when slots change.
+const _bgVideoFiles = { top: null, circle: null };
+function _syncBgVideoToSpeedTrace() {
+  const f = _bgVideoFiles.circle || _bgVideoFiles.top;
+  if (f && typeof window.loadVideo === 'function') {
+    if (window._speedTraceVideoSource === 'manual') {
+      const keep = !confirm('Override the manually loaded SpeedTrace video with the design video?');
+      if (keep) return;
+    }
+    window.loadVideo(f);
+  } else if (!f && typeof window.resetTool === 'function') {
+    if (window._speedTraceVideoSource !== 'manual') window.resetTool();
+  }
+}
+
 function _setBg(which, file) {
   _pushUndo();
   const isVideo = (file.type || '').startsWith('video/');
@@ -2754,16 +2795,44 @@ function _setBg(which, file) {
   document.getElementById(labelId).textContent = file.name;
   document.getElementById(fileId).value = '';
   // Reset framing for newly uploaded media so it starts at default cover/center
-  _framing[which] = { x: 50, y: 50, scale: 1 };
+  _framing[which] = { x: 50, y: 50, scale: 1, rotation: 0 };
   tmplApplyFraming(which);
   _setHasMedia(which, true);
+  // Forward video to SpeedTrace (circle takes priority over top)
+  _bgVideoFiles[which] = isVideo ? file : null;
+  _syncBgVideoToSpeedTrace();
 }
 
 // ── Framing (drag-to-pan / scroll-to-zoom) ───────────────
 const _framing = {
-  top:    { x: 50, y: 50, scale: 1 },
-  circle: { x: 50, y: 50, scale: 1 },
+  top:    { x: 50, y: 50, scale: 1, rotation: 0 },
+  circle: { x: 50, y: 50, scale: 1, rotation: 0 },
 };
+// Minimum scale so the W×H box, rotated+scaled around the framing focal point
+// (fxPct%, fyPct%), still covers the [0,W]×[0,H] container. Accounts for both
+// rotation AND pan position — rotating around an off-center pivot shifts the
+// box away from the container, so extra scale is needed to keep coverage.
+function _frameCoverScale(rotationDeg, W, H, fxPct, fyPct) {
+  const r = (rotationDeg || 0) * Math.PI / 180;
+  if (Math.abs(Math.sin(r)) < 1e-4 && Math.cos(r) > 0) return 1;
+  const cosR = Math.cos(r), sinR = Math.sin(r);
+  const cx = (fxPct / 100) * W, cy = (fyPct / 100) * H;
+  let s = 1;
+  const corners = [[0, 0], [W, 0], [W, H], [0, H]];
+  for (let i = 0; i < 4; i++) {
+    const ux = corners[i][0] - cx, uy = corners[i][1] - cy;
+    const A = ux * cosR + uy * sinR;
+    const B = -ux * sinR + uy * cosR;
+    if (A >  1e-6 && W - cx > 1e-6) s = Math.max(s,  A / (W - cx));
+    if (A < -1e-6 && cx     > 1e-6) s = Math.max(s, -A / cx);
+    if (B >  1e-6 && H - cy > 1e-6) s = Math.max(s,  B / (H - cy));
+    if (B < -1e-6 && cy     > 1e-6) s = Math.max(s, -B / cy);
+  }
+  // Cap so extreme corner pans (where perfect coverage would need an infinite
+  // scale) don't blow the image up. Beyond this, a small sliver of transparency
+  // may appear at the diagonally-opposite corner — acceptable trade-off.
+  return Math.min(s, 8);
+}
 function _frameContainer(which) {
   return document.querySelector(which === 'top' ? '#poster .p-top' : '#poster .p-circle');
 }
@@ -2777,41 +2846,109 @@ window.tmplApplyFraming = function(which) {
   if (!el) return;
   el.style.setProperty('--frame-x', f.x + '%');
   el.style.setProperty('--frame-y', f.y + '%');
-  el.style.setProperty('--frame-s', f.scale);
+  el.style.setProperty('--frame-s', f.scale || 1);
+  el.style.setProperty('--frame-r', (f.rotation || 0) + 'deg');
 };
+// Returns true if the W×H box, scaled by `s` and rotated by `θ` (radians)
+// around (fx, fy), still covers the [0,W]×[0,H] container.
+function _frameIsValidPos(W, H, rotationDeg, scale, fxPct, fyPct) {
+  return _frameCoverScale(rotationDeg, W, H, fxPct, fyPct) <= (scale || 1) + 1e-6;
+}
+// Walk from (fromX, fromY) toward (toX, toY) and return the furthest position
+// that still covers the container at the current rotation+scale. Used to
+// prevent the user from dragging or rotating past the safe pan range.
+function _frameClampPos(which, fromX, fromY, toX, toY) {
+  const f = _framing[which];
+  const ss = Math.min(_posterW, _posterH);
+  const W = which === 'top' ? _posterW : ss;
+  const H = which === 'top' ? Math.max(1, _posterH - ss) : ss;
+  const s = f.scale || 1, r = f.rotation || 0;
+  const ok = (x, y) => _frameIsValidPos(W, H, r, s, x, y);
+  if (ok(toX, toY)) return { x: toX, y: toY };
+  if (!ok(fromX, fromY)) {
+    if (!ok(50, 50)) return { x: 50, y: 50 };
+    fromX = 50; fromY = 50;
+  }
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (ok(fromX + mid * (toX - fromX), fromY + mid * (toY - fromY))) lo = mid;
+    else hi = mid;
+  }
+  return { x: fromX + lo * (toX - fromX), y: fromY + lo * (toY - fromY) };
+}
+// Snap current framing into the valid region for the present rotation+scale.
+function _frameReclampCurrent(which) {
+  const f = _framing[which];
+  const c = _frameClampPos(which, 50, 50, f.x, f.y);
+  f.x = c.x; f.y = c.y;
+}
 window.tmplResetFraming = function(which) {
   _pushUndo();
-  _framing[which] = { x: 50, y: 50, scale: 1 };
+  _framing[which] = { x: 50, y: 50, scale: 1, rotation: 0 };
   tmplApplyFraming(which);
 };
 function _clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function _setupFrameHandle(handle) {
   const which = handle.dataset.frameTarget;
-  let dragging = false, startMx = 0, startMy = 0, startFx = 50, startFy = 50;
+  let dragging = false, rotating = false;
+  let startMx = 0, startMy = 0, startFx = 50, startFy = 50;
+  let startAngle = 0, startRotation = 0;
 
   handle.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
-    if (_spaceHeld) return; // canvas pan takes over when space is held
+    if (_spaceHeld) return;
     if (!_frameContainer(which).classList.contains('has-media')) return;
     _pushUndo();
-    dragging = true;
-    startMx = e.clientX; startMy = e.clientY;
-    startFx = _framing[which].x; startFy = _framing[which].y;
+    if (e.ctrlKey) {
+      const rect = handle.getBoundingClientRect();
+      const cx = rect.left + rect.width  / 2;
+      const cy = rect.top  + rect.height / 2;
+      startAngle    = Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI;
+      startRotation = _framing[which].rotation || 0;
+      rotating = true;
+    } else {
+      startMx = e.clientX; startMy = e.clientY;
+      startFx = _framing[which].x; startFy = _framing[which].y;
+      dragging = true;
+    }
     handle.classList.add('dragging');
     e.preventDefault();
   });
   document.addEventListener('mousemove', e => {
-    if (!dragging) return;
-    const rect = handle.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
-    const dxPct = (e.clientX - startMx) / rect.width  * 100;
-    const dyPct = (e.clientY - startMy) / rect.height * 100;
-    _framing[which].x = _clamp(startFx - dxPct, 0, 100);
-    _framing[which].y = _clamp(startFy - dyPct, 0, 100);
-    tmplApplyFraming(which);
+    if (dragging) {
+      const rect = handle.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const dxPct = (e.clientX - startMx) / rect.width  * 100;
+      const dyPct = (e.clientY - startMy) / rect.height * 100;
+      // Rotate the screen-space drag delta into image-local space so dragging
+      // always moves the image in the direction the user drags, regardless of
+      // how the image is rotated (e.g. upside-down flips both axes).
+      const rRad = (_framing[which].rotation || 0) * Math.PI / 180;
+      const cosR = Math.cos(-rRad), sinR = Math.sin(-rRad);
+      const localDx = dxPct * cosR - dyPct * sinR;
+      const localDy = dxPct * sinR + dyPct * cosR;
+      const reqX = _clamp(startFx - localDx, 0, 100);
+      const reqY = _clamp(startFy - localDy, 0, 100);
+      const c = _frameClampPos(which, startFx, startFy, reqX, reqY);
+      _framing[which].x = c.x;
+      _framing[which].y = c.y;
+      tmplApplyFraming(which);
+    } else if (rotating) {
+      const rect = handle.getBoundingClientRect();
+      const cx = rect.left + rect.width  / 2;
+      const cy = rect.top  + rect.height / 2;
+      const angle = Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI;
+      _framing[which].rotation = startRotation + (angle - startAngle);
+      _frameReclampCurrent(which);
+      tmplApplyFraming(which);
+    }
   });
   document.addEventListener('mouseup', () => {
-    if (dragging) { dragging = false; handle.classList.remove('dragging'); }
+    if (dragging || rotating) {
+      dragging = false; rotating = false;
+      handle.classList.remove('dragging');
+    }
   });
 
   // Scroll to zoom media in-mask (plain scroll, no Alt)
@@ -2825,6 +2962,7 @@ function _setupFrameHandle(handle) {
     if (_wheelTimer) clearTimeout(_wheelTimer);
     _wheelTimer = setTimeout(() => { _wheelArmed = true; _wheelTimer = null; }, 400);
     _framing[which].scale = _clamp((_framing[which].scale || 1) - e.deltaY * 0.0015, 1, 5);
+    _frameReclampCurrent(which);
     tmplApplyFraming(which);
   }, { passive: false });
 
@@ -2852,7 +2990,17 @@ function _renderFramedToDataURL(source, srcW, srcH, cW, cH, frame) {
   const fdY = Math.floor(dY);
   const fdW = Math.ceil(dW + (dX - fdX));
   const fdH = Math.ceil(dH + (dY - fdY));
+  const rotation = frame.rotation || 0;
+  if (rotation !== 0) {
+    ctx.save();
+    const rx = (frame.x / 100) * cW;
+    const ry = (frame.y / 100) * cH;
+    ctx.translate(rx, ry);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-rx, -ry);
+  }
   ctx.drawImage(source, fdX, fdY, fdW, fdH);
+  if (rotation !== 0) ctx.restore();
   try { return c.toDataURL('image/png'); } catch(_) { return ''; }
 }
 window.tmplLoadTopBg    = function(input) { const f = input.files[0]; if (f) _setBg('top', f); };
@@ -2870,11 +3018,14 @@ window.tmplRemoveBg = function(which) {
   document.getElementById('slot-' + which).classList.remove('has-image');
   document.getElementById(labelId).textContent = '↑ Upload footage';
   document.getElementById(fileId).value = '';
-  _framing[which] = { x: 50, y: 50, scale: 1 };
+  _framing[which] = { x: 50, y: 50, scale: 1, rotation: 0 };
   tmplApplyFraming(which);
   _setHasMedia(which, false);
   // Re-sync tail to remaining video (if any)
   if (_liveBgVideos().length > 0) { _syncTailToVideo(); scatterReset(); }
+  // Update SpeedTrace input to reflect removal (circle still takes priority)
+  _bgVideoFiles[which] = null;
+  _syncBgVideoToSpeedTrace();
 };
 
 // ── Shared export helpers ────────────────────────────────
