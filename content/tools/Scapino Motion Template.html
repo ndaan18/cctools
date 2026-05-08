@@ -1146,6 +1146,28 @@ Rotterdam</textarea>
             ondblclick="_tailOffset=0;_syncTailToVideo();scatterReset()" title="Double-click to match video length">
         </div>
         <div class="tmpl-field">
+          <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;cursor:pointer;margin-bottom:0.35rem">
+            <input type="checkbox" id="remap-enable" onchange="motionRemapToggle(this.checked)"> Remap to motion (SpeedTrace)
+          </label>
+          <div id="remap-status" style="font-size:0.625rem;color:var(--muted);margin-bottom:0.4rem">Process a video in SpeedTrace to enable.</div>
+          <div id="remap-controls" style="display:none">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
+              <label class="tmpl-label">Floor</label>
+              <span class="tmpl-label" id="remap-floor-val">5%</span>
+            </div>
+            <input type="range" id="remap-floor" min="0" max="50" value="5" step="1"
+              oninput="document.getElementById('remap-floor-val').textContent=this.value+'%';motionRemapParamChanged()"
+              ondblclick="this.value=5;document.getElementById('remap-floor-val').textContent='5%';motionRemapParamChanged()" title="Double-click to reset">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0.5rem 0 0.3rem">
+              <label class="tmpl-label">Intensity</label>
+              <span class="tmpl-label" id="remap-intensity-val">100%</span>
+            </div>
+            <input type="range" id="remap-intensity" min="0" max="100" value="100" step="1"
+              oninput="document.getElementById('remap-intensity-val').textContent=this.value+'%';motionRemapParamChanged()"
+              ondblclick="this.value=100;document.getElementById('remap-intensity-val').textContent='100%';motionRemapParamChanged()" title="Double-click to reset">
+          </div>
+        </div>
+        <div class="tmpl-field">
           <label class="tmpl-label" style="margin-bottom:0.3rem;display:block">Timeline</label>
           <input type="range" id="scatter-scrubber" min="0" max="100" value="0" step="0.5" oninput="scatterScrub(this.value)">
           <div class="scatter-row">
@@ -1627,6 +1649,13 @@ window.startProcessing = async function() {
   const smoothed = addMovementSpeed(smooth(frameData,9));
   const baseName = videoFile.name.replace(/\.[^.]+$/,'');
 
+  // Publish speed series for the Motion tab's time-remap feature
+  window._motionSpeedSeries = smoothed.map(f => ({
+    ms: f.ms,
+    speed: Math.max(0, Math.min(1, f.features['Movement Speed'] || 0))
+  }));
+  window.dispatchEvent(new CustomEvent('motion-speed-series-updated'));
+
   csvContent = buildCSV(smoothed);
   bC.style.display='';
 
@@ -1689,6 +1718,8 @@ window.resetTool = function() {
   _procGen++; // cancel any in-flight processing loop
   const prevSource = window._speedTraceVideoSource;
   videoFile=null; frameData=[]; csvContent=null; mgjsonBlob=null;
+  window._motionSpeedSeries = null;
+  window.dispatchEvent(new CustomEvent('motion-speed-series-updated'));
   window._speedTraceVideoSource = 'none';
   window._speedTracePendingAutoProcess = false;
   fi.value=''; wv.src=''; dz.style.display=''; pw.classList.remove('active');
@@ -1766,8 +1797,8 @@ window.switchTab = function(tab) {
       _seekVideosTo(0);
     } else {
       const scrubber = document.getElementById('scatter-scrubber');
-      const elapsed = scrubber ? (parseFloat(scrubber.value) / 100) * SCATTER_TOTAL_MS : 0;
-      if (_scatter) _scatterApplyElapsed(elapsed);
+      const elapsed = scrubber ? (parseFloat(scrubber.value) / 100) * _motionTotalMs() : 0;
+      if (_scatter) _scatterApplyElapsed(_motionRemapApply(elapsed));
       _seekVideosTo(elapsed);
     }
     setTimeout(updatePosterSizing, 30);
@@ -1986,6 +2017,136 @@ function _scatterBtn(label, state) {
   b.dataset.state = state;
 }
 
+// ── Motion → Scatter time remap ──────────────────────────
+// When enabled, the scatter animation's elapsed time is driven by the dancer's
+// integrated movement speed (from SpeedTrace) rather than wall-clock time.
+// Background videos still play at their own real time independently.
+const _motionRemap = { enabled: false, floor: 0.05, intensity: 1.0, cumMs: null, cumScatter: null };
+
+function _motionRemapHasData() {
+  return Array.isArray(window._motionSpeedSeries) && window._motionSpeedSeries.length >= 2;
+}
+
+// Build cumulative wall-ms → scatter-ms tables from the speed series.
+// Per "instantaneous rate": d(scatter)/d(wall) = lerp(1, max(speed, floor), intensity).
+function _motionRemapBuild() {
+  _motionRemap.cumMs = null; _motionRemap.cumScatter = null;
+  if (!_motionRemapHasData()) return;
+  const series = window._motionSpeedSeries;
+  const floor = _motionRemap.floor;
+  const intensity = _motionRemap.intensity;
+  const cumMs = new Float64Array(series.length);
+  const cumSc = new Float64Array(series.length);
+  cumMs[0] = series[0].ms; cumSc[0] = 0;
+  for (let i = 1; i < series.length; i++) {
+    const dt = series[i].ms - series[i-1].ms;
+    // Use the rate at the START of the segment (left-Riemann sum).
+    const sRaw = series[i-1].speed;
+    const sFloored = Math.max(sRaw, floor);
+    const rate = (1 - intensity) * 1.0 + intensity * sFloored;
+    cumMs[i] = series[i].ms;
+    cumSc[i] = cumSc[i-1] + rate * dt;
+  }
+  _motionRemap.cumMs = cumMs;
+  _motionRemap.cumScatter = cumSc;
+}
+
+// Map wall-clock ms to scatter ms. Identity when remap is disabled or no data.
+function _motionRemapApply(wallMs) {
+  if (!_motionRemap.enabled || !_motionRemap.cumMs) return wallMs;
+  const cumMs = _motionRemap.cumMs, cumSc = _motionRemap.cumScatter;
+  const last = cumMs.length - 1;
+  if (wallMs <= cumMs[0]) return cumSc[0];
+  if (wallMs >= cumMs[last]) {
+    // Past the end of the speed series: extrapolate at rate 1 so scatter
+    // keeps progressing if the bg video is longer than the SpeedTrace data.
+    return cumSc[last] + (wallMs - cumMs[last]);
+  }
+  // Binary search for the segment
+  let lo = 0, hi = last;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (cumMs[mid] <= wallMs) lo = mid; else hi = mid;
+  }
+  const seg = cumMs[hi] - cumMs[lo];
+  const f = seg > 0 ? (wallMs - cumMs[lo]) / seg : 0;
+  return cumSc[lo] + f * (cumSc[hi] - cumSc[lo]);
+}
+
+// Find the wall-clock time at which scatter reaches `scatterMs` (inverse map).
+function _motionRemapInverse(scatterMs) {
+  if (!_motionRemap.enabled || !_motionRemap.cumMs) return scatterMs;
+  const cumMs = _motionRemap.cumMs, cumSc = _motionRemap.cumScatter;
+  const last = cumMs.length - 1;
+  if (scatterMs <= cumSc[0]) return cumMs[0];
+  if (scatterMs >= cumSc[last]) {
+    return cumMs[last] + (scatterMs - cumSc[last]); // extrapolate at rate 1
+  }
+  let lo = 0, hi = last;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (cumSc[mid] <= scatterMs) lo = mid; else hi = mid;
+  }
+  const seg = cumSc[hi] - cumSc[lo];
+  const f = seg > 0 ? (scatterMs - cumSc[lo]) / seg : 0;
+  return cumMs[lo] + f * (cumMs[hi] - cumMs[lo]);
+}
+
+// Wall-clock duration of the full motion playback (videos may be longer or shorter than scatter).
+function _motionTotalMs() {
+  if (!_motionRemap.enabled) return SCATTER_TOTAL_MS;
+  const scatterEndsAt = _motionRemapInverse(SCATTER_TOTAL_MS);
+  const vidMs = _shortestVideoMs();
+  return Math.max(scatterEndsAt, vidMs || 0);
+}
+
+window.motionRemapToggle = function(on) {
+  _motionRemap.enabled = !!on;
+  if (_motionRemap.enabled && !_motionRemapHasData()) {
+    document.getElementById('remap-enable').checked = false;
+    _motionRemap.enabled = false;
+    return;
+  }
+  document.getElementById('remap-controls').style.display = _motionRemap.enabled ? '' : 'none';
+  _motionRemapBuild();
+  _motionRemapApplyToScrubber();
+};
+
+window.motionRemapParamChanged = function() {
+  _motionRemap.floor     = (parseInt(document.getElementById('remap-floor').value) || 0) / 100;
+  _motionRemap.intensity = (parseInt(document.getElementById('remap-intensity').value) || 0) / 100;
+  _motionRemapBuild();
+  _motionRemapApplyToScrubber();
+};
+
+function _motionRemapApplyToScrubber() {
+  // Only re-apply if scatter is currently initialized — avoids forcing scatter
+  // init in views (design / speedtrace) where the user isn't seeing motion.
+  if (!_scatter) return;
+  const scrubber = document.getElementById('scatter-scrubber');
+  if (scrubber) scatterScrub(scrubber.value);
+}
+
+function _motionRemapSyncStatus() {
+  const has = _motionRemapHasData();
+  const status = document.getElementById('remap-status');
+  const cb = document.getElementById('remap-enable');
+  if (status) status.style.display = has ? 'none' : '';
+  if (cb) cb.disabled = !has;
+  if (!has && _motionRemap.enabled) {
+    _motionRemap.enabled = false;
+    if (cb) cb.checked = false;
+    document.getElementById('remap-controls').style.display = 'none';
+  } else if (has && _motionRemap.enabled) {
+    _motionRemapBuild();
+    _motionRemapApplyToScrubber();
+  }
+}
+
+window.addEventListener('motion-speed-series-updated', _motionRemapSyncStatus);
+// Also call once at startup in case data was set before this listener attached
+setTimeout(_motionRemapSyncStatus, 0);
+
 // ── Video timeline sync ──────────────────────────────────
 function _liveBgVideos() {
   return ['p-video-top', 'p-video-circle']
@@ -2047,14 +2208,16 @@ function _pauseVideos() { _liveBgVideos().forEach(v => { try { v.pause(); } catc
 function _startPlayback() {
   const scrubber = document.getElementById('scatter-scrubber');
   _scatterBtn('◼ Stop', 'playing');
-  const startElapsed = (parseFloat(scrubber.value) / 100) * SCATTER_TOTAL_MS;
+  const total = _motionTotalMs();
+  const startElapsed = (parseFloat(scrubber.value) / 100) * total;
   const t0 = performance.now() - startElapsed;
   _seekVideosTo(startElapsed);
   _playVideos();
   function tick(now) {
     const elapsed = now - t0;
-    const scrubProgress = Math.min(elapsed / SCATTER_TOTAL_MS, 1);
-    _scatterApplyElapsed(elapsed);
+    const t = _motionTotalMs();
+    const scrubProgress = Math.min(elapsed / t, 1);
+    _scatterApplyElapsed(_motionRemapApply(elapsed));
     scrubber.value = scrubProgress * 100;
     if (scrubProgress < 1) { _scatterRAF = requestAnimationFrame(tick); }
     else { _scatterRAF = null; _pauseVideos(); _scatterBtn('↺ Replay', 'done'); }
@@ -2089,8 +2252,8 @@ window.scatterPlay = function() {
 window.scatterScrub = function(val) {
   if (_scatterRAF) { cancelAnimationFrame(_scatterRAF); _scatterRAF = null; }
   if (!_scatter) _scatterInit();
-  const elapsed = (val / 100) * SCATTER_TOTAL_MS;
-  _scatterApplyElapsed(elapsed);
+  const elapsed = (val / 100) * _motionTotalMs();
+  _scatterApplyElapsed(_motionRemapApply(elapsed));
   _pauseVideos();
   _seekVideosTo(elapsed);
   _scatterBtn(+val >= 100 ? '↺ Replay' : '▶ Play', +val >= 100 ? 'done' : 'paused');
@@ -2293,7 +2456,7 @@ function _restoreMedia(imgId, vidId, slotId, labelId, imgSrc, imgEmpty, vidSrc, 
       if (vid.readyState >= 1) onMeta();
       else vid.addEventListener('loadedmetadata', onMeta, { once: true });
       const scrubber = document.getElementById('scatter-scrubber');
-      const elapsed  = scrubber ? (parseFloat(scrubber.value) / 100) * SCATTER_TOTAL_MS : 0;
+      const elapsed  = scrubber ? (parseFloat(scrubber.value) / 100) * _motionTotalMs() : 0;
       _seekVideo(vid, elapsed);
     }
   }
@@ -2820,7 +2983,7 @@ window.downloadPosterPrint = async function() {
     if (!hadDesignView) poster.classList.remove('design-view');
     const scrubber = document.getElementById('scatter-scrubber');
     if (!hadDesignView && scrubber) {
-      const elapsed = (parseFloat(scrubber.value) / 100) * SCATTER_TOTAL_MS;
+      const elapsed = (parseFloat(scrubber.value) / 100) * _motionTotalMs();
       _seekVideosTo(elapsed);
     }
     if (btn) { btn.disabled = false; btn.textContent = '↓ Download Print'; }
@@ -2909,7 +3072,7 @@ function _setBg(which, file) {
     if (vid.readyState >= 1) onMeta();
     else vid.addEventListener('loadedmetadata', onMeta, { once: true });
     const scrubber = document.getElementById('scatter-scrubber');
-    const elapsed  = scrubber ? (parseFloat(scrubber.value) / 100) * SCATTER_TOTAL_MS : 0;
+    const elapsed  = scrubber ? (parseFloat(scrubber.value) / 100) * _motionTotalMs() : 0;
     _seekVideo(vid, elapsed);
   } else {
     _clearVideo(vid);
@@ -3309,7 +3472,8 @@ window.downloadPosterMP4 = async function() {
   const outW = (Math.round(_posterW * resScale)) & ~1;
   const outH = (Math.round(_posterH * resScale)) & ~1;
   const frameMs = 1000 / fps;
-  const totalFrames = Math.ceil(SCATTER_TOTAL_MS / frameMs);
+  const motionTotal = _motionTotalMs();
+  const totalFrames = Math.ceil(motionTotal / frameMs);
 
   const h2cOpts = { scale: resScale, width: _posterW, height: _posterH, useCORS: true, allowTaint: false, logging: false };
 
@@ -3343,10 +3507,11 @@ window.downloadPosterMP4 = async function() {
     if (btn) btn.textContent = '◌ 0%';
 
     for (let f = 0; f <= totalFrames; f++) {
-      const elapsedAnim = Math.min(f * frameMs, SCATTER_TOTAL_MS);
+      const elapsedWall = Math.min(f * frameMs, motionTotal);
+      const scatterMs   = Math.min(_motionRemapApply(elapsedWall), SCATTER_TOTAL_MS);
 
-      _scatterApplyElapsed(elapsedAnim);
-      await applyFrameBg(elapsedAnim);
+      _scatterApplyElapsed(scatterMs);
+      await applyFrameBg(elapsedWall);
 
       const fc = await html2canvas(poster, h2cOpts);
 
