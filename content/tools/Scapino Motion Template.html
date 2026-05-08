@@ -1649,7 +1649,7 @@ window.startProcessing = async function() {
   setStatus('running','Extracting pose data…');
 
   const dur=wv.duration, step=1/fps;
-  let t=0, last=null, prevFeats=null, maxRawSpeed=1e-6;
+  let t=0, last=null, prevFeats=null, prevLandmarks=null, maxRawSpeed=1e-6;
 
   while(t<=dur) {
     await _seekAndWait(t);
@@ -1668,14 +1668,19 @@ window.startProcessing = async function() {
     } else {
       feats=last?{...last}:{"Movement Speed":0,"Center X":0,"Right Leg Height":0,"Wrist Height":0};
     }
-    if (prevFeats) {
-      const dx=(feats["Center X"]||0)-(prevFeats["Center X"]||0);
-      const dy=(feats["Right Leg Height"]||0)-(prevFeats["Right Leg Height"]||0);
-      const dw=(feats["Wrist Height"]||0)-(prevFeats["Wrist Height"]||0);
-      const rawSpeed=Math.sqrt(dx*dx+dy*dy+dw*dw);
-      maxRawSpeed=Math.max(maxRawSpeed,rawSpeed);
-      feats["Movement Speed"]=rawSpeed/maxRawSpeed;
+    if (prevLandmarks && landmarks) {
+      const JOINTS = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+      let sum = 0, cnt = 0;
+      for (const j of JOINTS) {
+        const a = prevLandmarks[j], b = landmarks[j]; if (!a || !b) continue;
+        const dx=(b.x||0)-(a.x||0), dy=(b.y||0)-(a.y||0), dz=(b.z||0)-(a.z||0);
+        sum += Math.sqrt(dx*dx+dy*dy+dz*dz); cnt++;
+      }
+      const rawSpeed = cnt > 0 ? sum / cnt : 0;
+      maxRawSpeed = Math.max(maxRawSpeed, rawSpeed);
+      feats["Movement Speed"] = maxRawSpeed > 0 ? rawSpeed / maxRawSpeed : 0;
     }
+    prevLandmarks = landmarks ? [...landmarks] : prevLandmarks;
     prevFeats={...feats};
     frameData.push({ms:Math.round(t*1000),features:feats,landmarks});
     updateStreamUI(feats);
