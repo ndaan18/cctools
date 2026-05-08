@@ -1171,11 +1171,11 @@ Rotterdam</textarea>
               ondblclick="this.value=100;document.getElementById('remap-intensity-val').textContent='100%';motionRemapParamChanged()" title="Double-click to reset">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0.5rem 0 0.3rem">
               <label class="tmpl-label">Contrast</label>
-              <span class="tmpl-label" id="remap-contrast-val">1.0</span>
+              <span class="tmpl-label" id="remap-contrast-val">2.5</span>
             </div>
-            <input type="range" id="remap-contrast" min="0.1" max="10" value="1" step="0.1"
+            <input type="range" id="remap-contrast" min="0.2" max="5" value="2.5" step="0.1"
               oninput="document.getElementById('remap-contrast-val').textContent=parseFloat(this.value).toFixed(1);motionRemapParamChanged()"
-              ondblclick="this.value=1;document.getElementById('remap-contrast-val').textContent='1.0';motionRemapParamChanged()" title="Double-click to reset">
+              ondblclick="this.value=2.5;document.getElementById('remap-contrast-val').textContent='2.5';motionRemapParamChanged()" title="Double-click to reset">
           </div>
         </div>
         <div class="tmpl-field">
@@ -1416,22 +1416,55 @@ function smooth(all, win=9) {
   return out;
 }
 
-function addMovementSpeed(smoothed) {
-  if (smoothed.length < 2) return smoothed;
-  const speeds = [0];
-  for (let i=1; i<smoothed.length; i++) {
-    const dx = (smoothed[i].features["Center X"]||0)        - (smoothed[i-1].features["Center X"]||0);
-    const dy = (smoothed[i].features["Right Leg Height"]||0) - (smoothed[i-1].features["Right Leg Height"]||0);
-    const dw = (smoothed[i].features["Wrist Height"]||0)    - (smoothed[i-1].features["Wrist Height"]||0);
-    speeds.push(Math.sqrt(dx*dx+dy*dy+dw*dw));
+// Compute Movement Speed from raw 3D landmark velocities across major joints.
+// This captures spins, twists, and full-body action that the previous 3-feature
+// (Center X / Right Leg Height / Wrist Height) approach misses. We use 3D so
+// horizontal spins (which mostly move limbs in the x-z plane) register strongly.
+function addMovementSpeed(smoothed, rawFrames) {
+  if (smoothed.length < 2 || !rawFrames || rawFrames.length < 2) return smoothed;
+  // MediaPipe Pose landmark indices for major joints
+  const JOINTS = [
+    0,                  // nose (head)
+    11, 12,             // shoulders
+    13, 14,             // elbows
+    15, 16,             // wrists
+    23, 24,             // hips
+    25, 26,             // knees
+    27, 28              // ankles
+  ];
+  const N = rawFrames.length;
+  const raw = new Float64Array(N);
+  for (let i = 1; i < N; i++) {
+    const lm0 = rawFrames[i-1].landmarks;
+    const lm1 = rawFrames[i].landmarks;
+    if (!lm0 || !lm1) { raw[i] = raw[i-1]; continue; }
+    let sum = 0, cnt = 0;
+    for (const j of JOINTS) {
+      const a = lm0[j], b = lm1[j];
+      if (!a || !b) continue;
+      const dx = (b.x || 0) - (a.x || 0);
+      const dy = (b.y || 0) - (a.y || 0);
+      const dz = (b.z || 0) - (a.z || 0);
+      sum += Math.sqrt(dx*dx + dy*dy + dz*dz);
+      cnt++;
+    }
+    raw[i] = cnt > 0 ? sum / cnt : 0;
   }
-  // Normalise so that the median speed maps to 0.5.
-  // This keeps medium movement at 0.5 regardless of how fast the peak is.
-  // Fall back to max if median is zero (e.g. mostly-still video).
-  const sorted = [...speeds].sort((a, b) => a - b);
+  // Light smoothing on the speed signal (keeps peaks, kills detection noise).
+  const smoothed01 = new Float64Array(N);
+  const W = 2; // half-window → 5-frame window
+  for (let i = 0; i < N; i++) {
+    let s = 0, c = 0;
+    for (let j = Math.max(0,i-W); j <= Math.min(N-1,i+W); j++) { s += raw[j]; c++; }
+    smoothed01[i] = s / c;
+  }
+  // Normalise so the median maps to 0.5; fall back to max if mostly still.
+  const sorted = [...smoothed01].sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length * 0.5)] || 0;
-  const ref = median > 0 ? median * 2 : Math.max(...speeds, 1e-6);
-  smoothed.forEach((d,i)=>{ d.features["Movement Speed"] = Math.min(speeds[i] / ref, 1); });
+  const ref = median > 0 ? median * 2 : Math.max(...smoothed01, 1e-6);
+  smoothed.forEach((d, i) => {
+    d.features["Movement Speed"] = Math.min(smoothed01[i] / ref, 1);
+  });
   return smoothed;
 }
 
@@ -1662,7 +1695,7 @@ window.startProcessing = async function() {
   await new Promise(r=>setTimeout(r,50));
   if (_procGen !== gen) return;
 
-  const smoothed = addMovementSpeed(smooth(frameData,9));
+  const smoothed = addMovementSpeed(smooth(frameData,9), frameData);
   // Write the correctly normalised Movement Speed back into frameData so
   // scrubbing always shows the median-normalised values, not the stale
   // running-max values that were stored during extraction.
@@ -2046,7 +2079,7 @@ function _scatterBtn(label, state) {
 // When enabled, the scatter animation's elapsed time is driven by the dancer's
 // integrated movement speed (from SpeedTrace) rather than wall-clock time.
 // Background videos still play at their own real time independently.
-const _motionRemap = { enabled: false, floor: 0.05, intensity: 1.0, contrast: 1.0, cumMs: null, cumScatter: null };
+const _motionRemap = { enabled: false, floor: 0, intensity: 1.0, contrast: 1.0, cumMs: null, cumScatter: null };
 
 function _motionRemapHasData() {
   return Array.isArray(window._motionSpeedSeries) && window._motionSpeedSeries.length >= 2;
@@ -2061,22 +2094,39 @@ function _motionRemapBuild() {
   const floor = _motionRemap.floor;
   const intensity = _motionRemap.intensity;
   const contrast = _motionRemap.contrast;
-  const cumMs = new Float64Array(series.length);
-  const cumSc = new Float64Array(series.length);
-  cumMs[0] = series[0].ms; cumSc[0] = 0;
-  for (let i = 1; i < series.length; i++) {
+  const N = series.length;
+  const cumMs = new Float64Array(N);
+  const cumSc = new Float64Array(N);
+
+  // Pass 1 — compute the raw rate at each segment and the time-weighted mean.
+  // Power curve mapping (centred at 0.5):  rate = (2 × speed) ^ contrast
+  //   speed=0   → rate=0  (frozen)
+  //   speed=1   → rate=2^contrast  (e.g. contrast=3 → 8× normal)
+  // Floor lifts the input speed; intensity blends between linear (rate=1) and full curve.
+  const rawRate = new Float64Array(N);
+  let totRate = 0, totDt = 0;
+  for (let i = 1; i < N; i++) {
     const dt = series[i].ms - series[i-1].ms;
-    // Apply floor, then contrast-stretch around 0.5, then map to rate.
-    // Contrast: contrasted = clamp(0.5 + (speed − 0.5) × contrast, 0, 1)
-    //   contrast=1 → identity; contrast=2 → deviations from 0.5 doubled.
-    // Rate: rate = contrasted × 2  → 0.5 → 1× (normal), 1.0 → 2× (fast).
     const sRaw = series[i-1].speed;
     const sFloored = Math.max(sRaw, floor);
-    const sContrasted = Math.max(0, Math.min(1, 0.5 + (sFloored - 0.5) * contrast));
-    const fullRate = sContrasted * 2;
-    const rate = (1 - intensity) * 1.0 + intensity * fullRate;
+    const fullRate = Math.pow(sFloored * 2, contrast);
+    rawRate[i] = (1 - intensity) * 1.0 + intensity * fullRate;
+    totRate += rawRate[i] * dt;
+    totDt += dt;
+  }
+  // Mean rate over the video. Normalising by this keeps the AVERAGE rate at 1×
+  // regardless of contrast, so the scatter param values that feel right
+  // without remap continue to feel right with remap on. The shape (fast bursts
+  // racing ahead, slow moments crawling) is preserved.
+  const meanRate = totDt > 0 ? Math.max(totRate / totDt, 1e-6) : 1;
+
+  // Pass 2 — build the cumulative scatter table with normalised rates.
+  cumMs[0] = series[0].ms; cumSc[0] = 0;
+  for (let i = 1; i < N; i++) {
+    const dt = series[i].ms - series[i-1].ms;
+    const normRate = rawRate[i] / meanRate;
     cumMs[i] = series[i].ms;
-    cumSc[i] = cumSc[i-1] + rate * dt;
+    cumSc[i] = cumSc[i-1] + normRate * dt;
   }
   _motionRemap.cumMs = cumMs;
   _motionRemap.cumScatter = cumSc;
