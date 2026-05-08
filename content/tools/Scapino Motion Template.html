@@ -2221,7 +2221,13 @@ function _motionRemapSyncStatus() {
     _motionRemap.enabled = false;
     if (cb) cb.checked = false;
     document.getElementById('remap-controls').style.display = 'none';
-  } else if (has && _motionRemap.enabled) {
+  } else if (has) {
+    _motionRemap.enabled = true;
+    if (cb) cb.checked = true;
+    document.getElementById('remap-controls').style.display = '';
+    _motionRemap.floor     = (parseInt(document.getElementById('remap-floor').value) || 0) / 100;
+    _motionRemap.intensity = (parseInt(document.getElementById('remap-intensity').value) || 0) / 100;
+    _motionRemap.contrast  = parseFloat(document.getElementById('remap-contrast').value) || 1.0;
     _motionRemapBuild();
     _motionRemapApplyToScrubber();
   }
