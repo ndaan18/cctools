@@ -224,6 +224,50 @@ body {
   transition: width 0.08s linear;
 }
 
+/* ── Timeline scrubber ───────────────────────────────── */
+#scrubber-wrap {
+  display: none;
+  padding: 0.5rem 1.25rem 0.625rem;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 0.5rem;
+  flex-direction: column;
+}
+#scrubber-wrap.active { display: flex; }
+#frame-scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  border-radius: 99px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+#frame-scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--text);
+  cursor: pointer;
+  margin-top: 0;
+}
+#frame-scrubber::-moz-range-thumb {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: none;
+  background: var(--text);
+  cursor: pointer;
+}
+.scrubber-time {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}
+
 /* ── Controls bar ────────────────────────────────────── */
 .controls {
   flex-shrink: 0;
@@ -826,6 +870,13 @@ input[type="color"].tmpl-swatch {
           <video id="source-video" playsinline muted></video>
           <canvas id="overlay-canvas"></canvas>
         </div>
+        <div id="scrubber-wrap">
+          <input type="range" id="frame-scrubber" min="0" max="0" value="0" step="1">
+          <div class="scrubber-time">
+            <span id="scrubber-current">0:00</span>
+            <span id="scrubber-total">0:00</span>
+          </div>
+        </div>
       </div>
 
       <div id="progress-wrap">
@@ -1230,6 +1281,11 @@ const CONVERTER = "https://goprotelemetryextractor.com/csv-gpx-to-mgjson/";
 
 let poseLandmarker = null, videoFile = null, frameData = [], fps = 30;
 let csvContent = null, mgjsonBlob = null;
+let _procGen = 0; // bumped on reset / new run; lets in-flight loops self-cancel
+// MediaPipe VIDEO mode requires strictly increasing timestamps across the
+// lifetime of the landmarker. We track the last value so a re-run after a
+// fully processed video doesn't get rejected for going "back in time".
+let _lastDetectMs = 0;
 
 const _ = id => document.getElementById(id);
 const dz=_('dropzone'),fi=_('file-input'),pw=_('preview-wrap'),
@@ -1237,7 +1293,26 @@ const dz=_('dropzone'),fi=_('file-input'),pw=_('preview-wrap'),
       prw=_('progress-wrap'),pb=_('progress-bar'),pp=_('progress-pct'),
       pl=_('progress-label-text'),sd=_('status-dot'),st=_('status-text'),
       bP=_('btn-process'),bM=_('btn-mgjson'),bC=_('btn-csv'),bR=_('btn-reset'),
-      sl=_('stream-list');
+      sl=_('stream-list'),
+      scrubWrap=_('scrubber-wrap'),scrubEl=_('frame-scrubber'),
+      scrubCur=_('scrubber-current'),scrubTot=_('scrubber-total');
+
+function _fmtTime(sec) {
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2,'0')}`;
+}
+scrubEl.addEventListener('input', () => {
+  const idx = Math.max(0, Math.min(frameData.length - 1, parseInt(scrubEl.value)));
+  if (!frameData[idx]) return;
+  const frame = frameData[idx];
+  scrubCur.textContent = _fmtTime(frame.ms / 1000);
+  updateStreamUI(frame.features);
+  wv.currentTime = frame.ms / 1000;
+  wv.addEventListener('seeked', () => {
+    cx.drawImage(wv, 0, 0, cv.width, cv.height);
+    if (frame.landmarks) drawSkeleton(frame.landmarks, cv.width, cv.height);
+  }, { once: true });
+});
 
 // ── Stream UI ──────────────────────────────────────────────────────
 function buildStreamUI() {
@@ -1463,6 +1538,11 @@ function loadVideo(file) {
     bP.disabled=false; bR.style.display='';
     _('meta-fps').textContent=fps.toFixed(2);
     _('meta-duration').textContent=wv.duration.toFixed(2)+'s';
+    // Auto-process if forwarded from design tab
+    if (window._speedTraceVideoSource === 'design') {
+      if (poseLandmarker) window.startProcessing();
+      else window._speedTracePendingAutoProcess = true;
+    }
   },{once:true});
 }
 // Expose to non-module scripts (e.g. design tab forwarding videos here).
@@ -1473,23 +1553,47 @@ window.loadVideo = function(file) {
 };
 
 // ── Processing ─────────────────────────────────────────────────────
+// Seek helper: if the video is already at the target time, no `seeked`
+// event fires and the await would hang. Resolve immediately in that case.
+function _seekAndWait(target) {
+  if (Math.abs(wv.currentTime - target) < 1e-4) return Promise.resolve();
+  return new Promise(r => {
+    const onSeeked = () => { wv.removeEventListener('seeked', onSeeked); r(); };
+    wv.addEventListener('seeked', onSeeked);
+    wv.currentTime = target;
+  });
+}
+
 window.startProcessing = async function() {
   if (!poseLandmarker||!videoFile) return;
+  const gen = ++_procGen;
   frameData=[]; csvContent=null; mgjsonBlob=null;
   bP.disabled=true; bM.style.display='none'; bC.style.display='none';
+  bR.style.display='';
+  scrubWrap.classList.remove('active');
   prw.classList.add('active');
+  // Reset stale progress UI from any prior run
+  pb.style.width='0%'; pp.textContent='0%'; pl.textContent='Extracting…';
+  _('meta-frames').textContent='0';
   setStatus('running','Extracting pose data…');
 
   const dur=wv.duration, step=1/fps;
   let t=0, last=null, prevFeats=null, maxRawSpeed=1e-6;
 
   while(t<=dur) {
-    await new Promise(r=>{wv.currentTime=t;wv.addEventListener('seeked',r,{once:true});});
-    const res=poseLandmarker.detectForVideo(wv,t*1000);
-    let feats;
+    await _seekAndWait(t);
+    if (_procGen !== gen) return;
+    let detectMs = Math.round(t*1000);
+    if (detectMs <= _lastDetectMs) detectMs = _lastDetectMs + 1;
+    _lastDetectMs = detectMs;
+    let res;
+    try { res = poseLandmarker.detectForVideo(wv, detectMs); }
+    catch(err) { console.warn('detectForVideo failed', err); res = { landmarks: [] }; }
+    let feats, landmarks=null;
     if(res.landmarks?.length>0){
-      feats=extractFeatures(res.landmarks[0]); last={...feats};
-      drawSkeleton(res.landmarks[0],cv.width,cv.height);
+      landmarks=res.landmarks[0];
+      feats=extractFeatures(landmarks); last={...feats};
+      drawSkeleton(landmarks,cv.width,cv.height);
     } else {
       feats=last?{...last}:{"Movement Speed":0,"Center X":0,"Right Leg Height":0,"Wrist Height":0};
     }
@@ -1502,7 +1606,7 @@ window.startProcessing = async function() {
       feats["Movement Speed"]=rawSpeed/maxRawSpeed;
     }
     prevFeats={...feats};
-    frameData.push({ms:Math.round(t*1000),features:feats});
+    frameData.push({ms:Math.round(t*1000),features:feats,landmarks});
     updateStreamUI(feats);
     const pct=Math.round((t/dur)*100);
     pb.style.width=pct+'%'; pp.textContent=pct+'%';
@@ -1510,12 +1614,15 @@ window.startProcessing = async function() {
     _('meta-frames').textContent=frameData.length;
     t+=step;
     if(frameData.length%5===0) await new Promise(r=>setTimeout(r,0));
+    if (_procGen !== gen) return;
   }
 
+  if (_procGen !== gen) return;
   setStatus('running','Processing data…');
   pl.textContent='Smoothing & computing speed…';
   pb.style.width='90%'; pp.textContent='90%';
   await new Promise(r=>setTimeout(r,50));
+  if (_procGen !== gen) return;
 
   const smoothed = addMovementSpeed(smooth(frameData,9));
   const baseName = videoFile.name.replace(/\.[^.]+$/,'');
@@ -1527,12 +1634,18 @@ window.startProcessing = async function() {
   pl.textContent='Building MGJSON…';
   pb.style.width='94%'; pp.textContent='94%';
   await new Promise(r=>setTimeout(r,50));
+  if (_procGen !== gen) return;
 
   mgjsonBlob = new Blob([JSON.stringify(buildMGJSON(smoothed,fps))],{type:'application/json'});
   bM.style.display='';
   pb.style.width='100%'; pp.textContent='100%';
   pl.textContent=`Done — ${frameData.length} frames`;
   setStatus('done',`Done — ${frameData.length} frames`);
+  scrubEl.max = frameData.length - 1;
+  scrubEl.value = frameData.length - 1;
+  scrubTot.textContent = _fmtTime(wv.duration);
+  scrubCur.textContent = _fmtTime(wv.duration);
+  scrubWrap.classList.add('active');
 };
 
 // ── Save with native OS file picker ───────────────────────────────
@@ -1573,13 +1686,24 @@ window.downloadCSV = function() {
 
 // ── Reset ──────────────────────────────────────────────────────────
 window.resetTool = function() {
+  _procGen++; // cancel any in-flight processing loop
+  const prevSource = window._speedTraceVideoSource;
   videoFile=null; frameData=[]; csvContent=null; mgjsonBlob=null;
   window._speedTraceVideoSource = 'none';
+  window._speedTracePendingAutoProcess = false;
   fi.value=''; wv.src=''; dz.style.display=''; pw.classList.remove('active');
-  prw.classList.remove('active'); pb.style.width='0%';
+  scrubWrap.classList.remove('active'); scrubEl.value=0; scrubEl.max=0;
+  scrubCur.textContent='0:00'; scrubTot.textContent='0:00';
+  prw.classList.remove('active'); pb.style.width='0%'; pp.textContent='0%'; pl.textContent='';
   bP.disabled=true; bM.style.display='none'; bC.style.display='none'; bR.style.display='none';
   setStatus('idle','Ready — drop a video'); buildStreamUI();
   ['meta-frames','meta-duration','meta-fps'].forEach(id=>_(id).textContent='—');
+  // Fall back to design-tab video only when the user was previously on a
+  // manual upload — lets design-only users press Reset to upload their own.
+  if (prevSource === 'manual') {
+    const fallback = window._bgVideoFiles?.circle || window._bgVideoFiles?.top;
+    if (fallback) window.loadVideo(fallback);
+  }
 };
 
 function setStatus(s,msg){ sd.className='dot '+s; st.textContent=msg; }
@@ -1601,6 +1725,11 @@ function setStatus(s,msg){ sd.className='dot '+s; st.textContent=msg; }
       minTrackingConfidence:0.5
     });
     setStatus('idle','Ready — drop a video');
+    // If a design video arrived before the model finished loading, process it now
+    if (window._speedTracePendingAutoProcess && videoFile) {
+      window._speedTracePendingAutoProcess = false;
+      window.startProcessing();
+    }
   } catch(e){ setStatus('error','Model failed to load'); console.error(e); }
 })();
 </script>
@@ -2744,7 +2873,7 @@ function _clearVideo(vid) {
 }
 // Tracks the currently loaded video File for each design slot so we can
 // forward the right one to SpeedTrace when slots change.
-const _bgVideoFiles = { top: null, circle: null };
+const _bgVideoFiles = window._bgVideoFiles = { top: null, circle: null };
 function _syncBgVideoToSpeedTrace() {
   const f = _bgVideoFiles.circle || _bgVideoFiles.top;
   if (f && typeof window.loadVideo === 'function') {
