@@ -1090,6 +1090,10 @@ Rotterdam</textarea>
     <div id="panel-motion" class="tmpl-edit" style="display:none">
       <div class="panel-header"><div class="panel-header-title">Motion</div></div>
       <div class="tmpl-section">
+        <div class="tmpl-section-title">Movement Speed</div>
+        <canvas id="speed-graph" style="width:100%;height:72px;display:block;border-radius:3px;background:var(--surface-2);cursor:default"></canvas>
+      </div>
+      <div class="tmpl-section">
         <div class="tmpl-section-title">Motion Preview</div>
         <div class="tmpl-field">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
@@ -1165,6 +1169,13 @@ Rotterdam</textarea>
             <input type="range" id="remap-intensity" min="0" max="100" value="100" step="1"
               oninput="document.getElementById('remap-intensity-val').textContent=this.value+'%';motionRemapParamChanged()"
               ondblclick="this.value=100;document.getElementById('remap-intensity-val').textContent='100%';motionRemapParamChanged()" title="Double-click to reset">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0.5rem 0 0.3rem">
+              <label class="tmpl-label">Contrast</label>
+              <span class="tmpl-label" id="remap-contrast-val">1.0</span>
+            </div>
+            <input type="range" id="remap-contrast" min="0.1" max="10" value="1" step="0.1"
+              oninput="document.getElementById('remap-contrast-val').textContent=parseFloat(this.value).toFixed(1);motionRemapParamChanged()"
+              ondblclick="this.value=1;document.getElementById('remap-contrast-val').textContent='1.0';motionRemapParamChanged()" title="Double-click to reset">
           </div>
         </div>
         <div class="tmpl-field">
@@ -1414,8 +1425,13 @@ function addMovementSpeed(smoothed) {
     const dw = (smoothed[i].features["Wrist Height"]||0)    - (smoothed[i-1].features["Wrist Height"]||0);
     speeds.push(Math.sqrt(dx*dx+dy*dy+dw*dw));
   }
-  const maxS = Math.max(...speeds, 1e-6);
-  smoothed.forEach((d,i)=>{ d.features["Movement Speed"]=speeds[i]/maxS; });
+  // Normalise so that the median speed maps to 0.5.
+  // This keeps medium movement at 0.5 regardless of how fast the peak is.
+  // Fall back to max if median is zero (e.g. mostly-still video).
+  const sorted = [...speeds].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length * 0.5)] || 0;
+  const ref = median > 0 ? median * 2 : Math.max(...speeds, 1e-6);
+  smoothed.forEach((d,i)=>{ d.features["Movement Speed"] = Math.min(speeds[i] / ref, 1); });
   return smoothed;
 }
 
@@ -1647,6 +1663,15 @@ window.startProcessing = async function() {
   if (_procGen !== gen) return;
 
   const smoothed = addMovementSpeed(smooth(frameData,9));
+  // Write the correctly normalised Movement Speed back into frameData so
+  // scrubbing always shows the median-normalised values, not the stale
+  // running-max values that were stored during extraction.
+  smoothed.forEach((sf, i) => {
+    if (frameData[i]) frameData[i].features['Movement Speed'] = sf.features['Movement Speed'];
+  });
+  // Refresh the stream UI to show the final corrected value
+  if (frameData.length) updateStreamUI(frameData[frameData.length - 1].features);
+
   const baseName = videoFile.name.replace(/\.[^.]+$/,'');
 
   // Publish speed series for the Motion tab's time-remap feature
@@ -2021,7 +2046,7 @@ function _scatterBtn(label, state) {
 // When enabled, the scatter animation's elapsed time is driven by the dancer's
 // integrated movement speed (from SpeedTrace) rather than wall-clock time.
 // Background videos still play at their own real time independently.
-const _motionRemap = { enabled: false, floor: 0.05, intensity: 1.0, cumMs: null, cumScatter: null };
+const _motionRemap = { enabled: false, floor: 0.05, intensity: 1.0, contrast: 1.0, cumMs: null, cumScatter: null };
 
 function _motionRemapHasData() {
   return Array.isArray(window._motionSpeedSeries) && window._motionSpeedSeries.length >= 2;
@@ -2035,15 +2060,21 @@ function _motionRemapBuild() {
   const series = window._motionSpeedSeries;
   const floor = _motionRemap.floor;
   const intensity = _motionRemap.intensity;
+  const contrast = _motionRemap.contrast;
   const cumMs = new Float64Array(series.length);
   const cumSc = new Float64Array(series.length);
   cumMs[0] = series[0].ms; cumSc[0] = 0;
   for (let i = 1; i < series.length; i++) {
     const dt = series[i].ms - series[i-1].ms;
-    // Use the rate at the START of the segment (left-Riemann sum).
+    // Apply floor, then contrast-stretch around 0.5, then map to rate.
+    // Contrast: contrasted = clamp(0.5 + (speed − 0.5) × contrast, 0, 1)
+    //   contrast=1 → identity; contrast=2 → deviations from 0.5 doubled.
+    // Rate: rate = contrasted × 2  → 0.5 → 1× (normal), 1.0 → 2× (fast).
     const sRaw = series[i-1].speed;
     const sFloored = Math.max(sRaw, floor);
-    const rate = (1 - intensity) * 1.0 + intensity * sFloored;
+    const sContrasted = Math.max(0, Math.min(1, 0.5 + (sFloored - 0.5) * contrast));
+    const fullRate = sContrasted * 2;
+    const rate = (1 - intensity) * 1.0 + intensity * fullRate;
     cumMs[i] = series[i].ms;
     cumSc[i] = cumSc[i-1] + rate * dt;
   }
@@ -2110,13 +2141,16 @@ window.motionRemapToggle = function(on) {
   document.getElementById('remap-controls').style.display = _motionRemap.enabled ? '' : 'none';
   _motionRemapBuild();
   _motionRemapApplyToScrubber();
+  _drawSpeedGraph(_speedGraphWallMs());
 };
 
 window.motionRemapParamChanged = function() {
   _motionRemap.floor     = (parseInt(document.getElementById('remap-floor').value) || 0) / 100;
   _motionRemap.intensity = (parseInt(document.getElementById('remap-intensity').value) || 0) / 100;
+  _motionRemap.contrast  = parseFloat(document.getElementById('remap-contrast').value) || 1.0;
   _motionRemapBuild();
   _motionRemapApplyToScrubber();
+  _drawSpeedGraph(_speedGraphWallMs());
 };
 
 function _motionRemapApplyToScrubber() {
@@ -2146,6 +2180,154 @@ function _motionRemapSyncStatus() {
 window.addEventListener('motion-speed-series-updated', _motionRemapSyncStatus);
 // Also call once at startup in case data was set before this listener attached
 setTimeout(_motionRemapSyncStatus, 0);
+
+// ── Speed graph ──────────────────────────────────────────
+// Draws like the After Effects speed graph: a straight diagonal = constant
+// speed; the actual cumulative curve deviates above (faster) or below (slower).
+// X axis = time. Y axis = normalized cumulative movement (0→1).
+function _drawSpeedGraph(wallMs) {
+  const cv = document.getElementById('speed-graph');
+  if (!cv) return;
+  const W = cv.offsetWidth || 240, H = cv.offsetHeight || 72;
+  if (W === 0 || H === 0) return;
+  cv.width = W * devicePixelRatio; cv.height = H * devicePixelRatio;
+  const cx = cv.getContext('2d');
+  cx.scale(devicePixelRatio, devicePixelRatio);
+
+  const series = window._motionSpeedSeries;
+
+  if (!series || series.length < 2) {
+    cx.fillStyle = '#888';
+    cx.font = '10px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+    cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.fillText('Process a video in SpeedTrace to see movement speed', W / 2, H / 2);
+    return;
+  }
+
+  // Build the cumulative curve for the graph.
+  // When remap is active use the already-computed cumScatter table (which
+  // includes floor, contrast and intensity) so the graph reflects the actual
+  // remap.  Otherwise fall back to raw cumulative speed.
+  // Normaliser = durMs so that constant rate=1 (speed=0.5) → diagonal 0→1.
+  const n = series.length;
+  const durMs = series[n - 1].ms || 1;
+  let cum, normaliser;
+  if (_motionRemap.enabled && _motionRemap.cumMs && _motionRemap.cumScatter) {
+    cum = _motionRemap.cumScatter;          // already in scatter-ms units
+    normaliser = durMs;                     // rate=1 constant → cumScatter=durMs
+  } else {
+    // Raw cumulative speed × 2 so speed=0.5 constant → normaliser=durMs as well
+    const rawCum = new Float64Array(n);
+    for (let i = 1; i < n; i++) {
+      const dt = series[i].ms - series[i - 1].ms;
+      rawCum[i] = rawCum[i - 1] + series[i - 1].speed * 2 * dt;
+    }
+    cum = rawCum;
+    normaliser = durMs;
+  }
+
+  const pad = 4; // px inset top/bottom
+  const toX = ms    => (ms / durMs) * W;
+  const toY = normV => H - pad - Math.min(normV, 2) / 2 * (H - pad * 2); // normV [0,2] → canvas
+
+  // ── Reference diagonal (constant speed = 0.5, rate = 1×) ──
+  cx.beginPath();
+  cx.moveTo(0, toY(0));
+  cx.lineTo(W, toY(1));
+  cx.strokeStyle = 'rgba(10,10,10,0.18)';
+  cx.lineWidth = 1;
+  cx.setLineDash([4, 4]);
+  cx.stroke();
+  cx.setLineDash([]);
+
+  // ── Build cumulative curve points ──
+  const pts = Array.from({ length: n }, (_, i) => ({
+    x: toX(series[i].ms),
+    y: toY(cum[i] / normaliser)
+  }));
+
+  // ── Fill area between diagonal and curve ──
+  // Above diagonal = faster than average (curve bows left).
+  // Below diagonal  = slower than average (curve bows right).
+  // Clip above diagonal: fill with a slightly darker tint.
+  // Clip below diagonal: fill with a slightly lighter tint.
+  const diagY = x => toY(0) + (toY(1) - toY(0)) * (x / W); // y on diagonal at pixel x
+
+  // Fill above diagonal (curve above) — faster region
+  cx.save();
+  cx.beginPath();
+  cx.moveTo(0, toY(0));
+  cx.lineTo(W, toY(1));
+  cx.lineTo(W, 0); cx.lineTo(0, 0);
+  cx.closePath();
+  cx.clip();
+  cx.beginPath();
+  cx.moveTo(pts[0].x, H);
+  pts.forEach(p => cx.lineTo(p.x, p.y));
+  cx.lineTo(pts[n-1].x, H);
+  cx.closePath();
+  cx.fillStyle = 'rgba(10,10,10,0.13)';
+  cx.fill();
+  cx.restore();
+
+  // Fill below diagonal (curve below) — slower region
+  cx.save();
+  cx.beginPath();
+  cx.moveTo(0, toY(0));
+  cx.lineTo(W, toY(1));
+  cx.lineTo(W, H); cx.lineTo(0, H);
+  cx.closePath();
+  cx.clip();
+  cx.beginPath();
+  cx.moveTo(pts[0].x, H);
+  pts.forEach(p => cx.lineTo(p.x, p.y));
+  cx.lineTo(pts[n-1].x, H);
+  cx.closePath();
+  cx.fillStyle = 'rgba(10,10,10,0.05)';
+  cx.fill();
+  cx.restore();
+
+  // ── Cumulative curve line ──
+  cx.beginPath();
+  cx.moveTo(pts[0].x, pts[0].y);
+  pts.forEach(p => cx.lineTo(p.x, p.y));
+  cx.strokeStyle = 'rgba(10,10,10,0.75)';
+  cx.lineWidth = 1.5;
+  cx.lineJoin = 'round';
+  cx.stroke();
+
+  // ── Playhead ──
+  if (wallMs != null && wallMs >= 0 && durMs > 0) {
+    const x = Math.max(0, Math.min(W, toX(wallMs)));
+    cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, H);
+    cx.strokeStyle = 'rgba(10,10,10,0.8)';
+    cx.lineWidth = 1.5;
+    cx.stroke();
+    // Dot at intersection with curve (interpolate)
+    const fracMs = Math.min(wallMs, durMs);
+    let lo = 0;
+    for (let i = 1; i < n; i++) { if (series[i].ms <= fracMs) lo = i; else break; }
+    const cumNorm = cum[lo] / normaliser;
+    cx.beginPath();
+    cx.arc(x, toY(cumNorm), 3, 0, Math.PI * 2);
+    cx.fillStyle = 'rgba(10,10,10,0.8)';
+    cx.fill();
+  }
+}
+
+function _speedGraphWallMs() {
+  const scrubber = document.getElementById('scatter-scrubber');
+  if (!scrubber) return 0;
+  return (parseFloat(scrubber.value) / 100) * _motionTotalMs();
+}
+
+window.addEventListener('motion-speed-series-updated', () => _drawSpeedGraph(_speedGraphWallMs()));
+// Redraw when motion tab becomes visible (tab switch)
+const _origSwitchTab = window.switchTab;
+window.switchTab = function(tab) {
+  _origSwitchTab(tab);
+  if (tab === 'motion') _drawSpeedGraph(_speedGraphWallMs());
+};
 
 // ── Video timeline sync ──────────────────────────────────
 function _liveBgVideos() {
@@ -2219,6 +2401,7 @@ function _startPlayback() {
     const scrubProgress = Math.min(elapsed / t, 1);
     _scatterApplyElapsed(_motionRemapApply(elapsed));
     scrubber.value = scrubProgress * 100;
+    _drawSpeedGraph(elapsed);
     if (scrubProgress < 1) { _scatterRAF = requestAnimationFrame(tick); }
     else { _scatterRAF = null; _pauseVideos(); _scatterBtn('↺ Replay', 'done'); }
   }
@@ -2257,6 +2440,7 @@ window.scatterScrub = function(val) {
   _pauseVideos();
   _seekVideosTo(elapsed);
   _scatterBtn(+val >= 100 ? '↺ Replay' : '▶ Play', +val >= 100 ? 'done' : 'paused');
+  _drawSpeedGraph(elapsed);
 };
 
 window.scatterReset = function() {
