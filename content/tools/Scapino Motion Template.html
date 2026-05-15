@@ -3765,7 +3765,12 @@ function _loadScript(src) {
 async function _ensureFfmpeg() {
   if (_ffmpegInstance) return _ffmpegInstance;
   const FFMPEG_BASE = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd';
-  const CORE_BASE   = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+  // NOTE: must use ESM core (not UMD) because passing classWorkerURL forces
+  // the class worker to type:'module', where importScripts is unavailable.
+  // The worker falls back to `await import(coreURL)` which requires the
+  // core to expose `createFFmpegCore` as a default export — only the ESM
+  // build does that.
+  const CORE_BASE   = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
   const UTIL_CDN    = 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js';
 
   const step = async (label, fn) => {
