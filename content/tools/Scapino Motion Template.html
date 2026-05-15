@@ -1292,11 +1292,11 @@ Rotterdam</textarea>
         <div class="tmpl-field">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
             <label class="tmpl-label">Bleed</label>
-            <span class="tmpl-label" id="exp-bleed-val">3 mm</span>
+            <span class="tmpl-label" id="exp-bleed-val">0 mm</span>
           </div>
-          <input type="range" id="exp-bleed" min="0" max="10" value="3" step="0.5"
+          <input type="range" id="exp-bleed" min="0" max="10" value="0" step="0.5"
             oninput="document.getElementById('exp-bleed-val').textContent=this.value+' mm'"
-            ondblclick="this.value=3;document.getElementById('exp-bleed-val').textContent='3 mm'" title="Double-click to reset">
+            ondblclick="this.value=0;document.getElementById('exp-bleed-val').textContent='0 mm'" title="Double-click to reset">
         </div>
         <div class="tmpl-field">
           <label class="tmpl-label" style="margin-bottom:0.5rem;display:block">Marks</label>
@@ -3088,6 +3088,13 @@ window.downloadPosterPrint = async function() {
   const circleHasVid = !vidCircle.hasAttribute('data-empty') && vidCircle.src && vidCircle.videoWidth;
 
   const saved = _exportBuildOverrides(poster, pTop, pCircle, colEls, placeholders);
+  const _transparentFmt  = fmt === 'png' || fmt === 'pdf';
+  const _topEmptyPrint    = !topHasImg    && !topHasVid;
+  const _circleEmptyPrint = !circleHasImg && !circleHasVid;
+  if (!_transparentFmt) {
+    if (_topEmptyPrint)    pTop.style.backgroundColor    = '#000000';
+    if (_circleEmptyPrint) pCircle.style.backgroundColor = '#000000';
+  }
 
   const ss     = Math.min(_posterW, _posterH);
   const topH   = Math.max(0, _posterH - ss);
@@ -3118,10 +3125,10 @@ window.downloadPosterPrint = async function() {
   await new Promise(r => setTimeout(r, 80)); // let seek settle
 
   try {
-    const posterCanvas = await html2canvas(poster, {
-      scale: 1, width: _posterW, height: _posterH,
-      useCORS: true, allowTaint: false, logging: false,
-    });
+    const _h2cPrint = { scale: 1, width: _posterW, height: _posterH, useCORS: true, allowTaint: false, logging: false };
+    const posterCanvas = (_transparentFmt && (_topEmptyPrint || _circleEmptyPrint))
+      ? await _twoPassTransparent(poster, pTop, pCircle, _topEmptyPrint, _circleEmptyPrint, _h2cPrint)
+      : await html2canvas(poster, _h2cPrint);
 
     const pW = _posterW, pH = _posterH;
     const colorBarH = doPrint ? Math.round(8 * mmToPx) : 0;
@@ -3133,8 +3140,7 @@ window.downloadPosterPrint = async function() {
     out.width = totalW; out.height = totalH;
     const ctx = out.getContext('2d');
 
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, totalW, totalH);
+    if (fmt === 'jpg') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, totalW, totalH); }
 
     const px0 = markAreaPx + bleedPx;
     const py0 = markAreaPx + bleedPx;
@@ -3230,20 +3236,26 @@ window.downloadPosterPrint = async function() {
       }
 
       if (!topFromImage) {
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(px0 - bleedPx, py0 - bleedPx, pW + 2 * bleedPx, bleedPx); // top band fallback
-        ctx.fillRect(px0 - bleedPx, py0, bleedPx, pH);                           // left
-        ctx.fillRect(px0 + pW,      py0, bleedPx, pH);                           // right
+        if (!_transparentFmt || topHasImg || topHasVid) {
+          ctx.fillStyle = bgColor;
+          ctx.fillRect(px0 - bleedPx, py0 - bleedPx, pW + 2 * bleedPx, bleedPx); // top band fallback
+          ctx.fillRect(px0 - bleedPx, py0, bleedPx, pH);                           // left
+          ctx.fillRect(px0 + pW,      py0, bleedPx, pH);                           // right
+        }
       } else {
         // Circle area: background colour only
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(px0 - bleedPx, py0 + topH, bleedPx, pH - topH); // left circle
-        ctx.fillRect(px0 + pW,      py0 + topH, bleedPx, pH - topH); // right circle
+        if (!_transparentFmt || circleHasImg || circleHasVid) {
+          ctx.fillStyle = bgColor;
+          ctx.fillRect(px0 - bleedPx, py0 + topH, bleedPx, pH - topH); // left circle
+          ctx.fillRect(px0 + pW,      py0 + topH, bleedPx, pH - topH); // right circle
+        }
       }
 
       // Bottom + all bottom corners: background colour
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(px0 - bleedPx, py0 + pH, pW + 2 * bleedPx, bleedPx);
+      if (!_transparentFmt || circleHasImg || circleHasVid) {
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(px0 - bleedPx, py0 + pH, pW + 2 * bleedPx, bleedPx);
+      }
     }
 
     if (doCrop) {
@@ -3273,7 +3285,7 @@ window.downloadPosterPrint = async function() {
       const jsPDF = await _loadJsPDF();
       const wMm = totalW / mmToPx, hMm = totalH / mmToPx;
       const doc = new jsPDF({ unit: 'mm', format: [wMm, hMm], orientation: 'portrait', compress: true });
-      doc.addImage(out.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, wMm, hMm);
+      doc.addImage(out.toDataURL('image/png'), 'PNG', 0, 0, wMm, hMm);
       await _saveBlob(doc.output('blob'), 'scapino-poster.pdf');
     } else {
       const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
@@ -3628,6 +3640,38 @@ window.tmplRemoveBg = function(which) {
 };
 
 // ── Shared export helpers ────────────────────────────────
+function _extractAlpha(wc, bc) {
+  const W = wc.width, H = wc.height;
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  const octx = out.getContext('2d');
+  const wd = wc.getContext('2d').getImageData(0, 0, W, H).data;
+  const bd = bc.getContext('2d').getImageData(0, 0, W, H).data;
+  const img = octx.createImageData(W, H);
+  const d = img.data;
+  for (let i = 0; i < wd.length; i += 4) {
+    const a = 1 - Math.max(wd[i]-bd[i], wd[i+1]-bd[i+1], wd[i+2]-bd[i+2]) / 255;
+    if (a <= 0) { d[i+3] = 0; continue; }
+    d[i]   = Math.min(255, bd[i]   / a | 0);
+    d[i+1] = Math.min(255, bd[i+1] / a | 0);
+    d[i+2] = Math.min(255, bd[i+2] / a | 0);
+    d[i+3] = a * 255 | 0;
+  }
+  octx.putImageData(img, 0, 0);
+  return out;
+}
+
+async function _twoPassTransparent(poster, pTop, pCircle, topEmpty, circleEmpty, h2cOpts) {
+  if (!topEmpty && !circleEmpty) return html2canvas(poster, h2cOpts);
+  if (topEmpty)    pTop.style.backgroundColor    = '#ffffff';
+  if (circleEmpty) pCircle.style.backgroundColor = '#ffffff';
+  const wc = await html2canvas(poster, h2cOpts);
+  if (topEmpty)    pTop.style.backgroundColor    = '#000000';
+  if (circleEmpty) pCircle.style.backgroundColor = '#000000';
+  const bc = await html2canvas(poster, h2cOpts);
+  return _extractAlpha(wc, bc);
+}
+
 function _exportBuildOverrides(poster, pTop, pCircle, colEls, placeholders) {
   const ss = Math.min(_posterW, _posterH);
   const margin = ss * 0.05, csz = ss;
@@ -3645,6 +3689,9 @@ function _exportBuildOverrides(poster, pTop, pCircle, colEls, placeholders) {
     circleBgSz:   pCircle.style.backgroundSize,
     circleBgPos:  pCircle.style.backgroundPosition,
     colFs:        [...colEls].map(el => el.style.fontSize),
+    topBgColor:   pTop.style.backgroundColor,
+    circleBgColor:pCircle.style.backgroundColor,
+    posterBg:     poster.style.background,
   };
   poster.style.transform = 'none';
   pTop.style.height      = topH + 'px';    pTop.style.padding   = margin + 'px';
@@ -3674,6 +3721,9 @@ function _exportRestoreOverrides(poster, pTop, pCircle, colEls, placeholders, sa
   if (circleHasVid) vidCircle.style.display = '';
   colEls.forEach((el, i) => el.style.fontSize = saved.colFs[i]);
   placeholders.forEach(el => el.style.display = '');
+  pTop.style.backgroundColor    = saved.topBgColor;
+  pCircle.style.backgroundColor = saved.circleBgColor;
+  poster.style.background       = saved.posterBg;
 }
 
 // ── Download MP4 (WebCodecs + mp4-muxer, native poster res) ─
@@ -3726,6 +3776,8 @@ window.downloadPosterMP4 = async function() {
   const circleHasVid = !vidCircle.hasAttribute('data-empty') && vidCircle.src && vidCircle.videoWidth;
 
   const saved = _exportBuildOverrides(poster, pTop, pCircle, colEls, placeholders);
+  if (!topHasImg && !topHasVid)       pTop.style.backgroundColor    = '#000000';
+  if (!circleHasImg && !circleHasVid) pCircle.style.backgroundColor = '#000000';
 
   function seekVid(v, elapsedMs) {
     if (!v || !v.src || v.hasAttribute('data-empty')) return Promise.resolve();
@@ -3874,6 +3926,8 @@ window.downloadPosterPNG = async function() {
   const circleHasVid = !vidCircle.hasAttribute('data-empty') && vidCircle.src && vidCircle.videoWidth;
 
   const saved = _exportBuildOverrides(poster, pTop, pCircle, colEls, placeholders);
+  const _topEmptyPng    = !topHasImg    && !topHasVid;
+  const _circleEmptyPng = !circleHasImg && !circleHasVid;
 
   // Compute container dimensions used for framing (border-box)
   const ssPng     = Math.min(_posterW, _posterH);
@@ -3902,7 +3956,10 @@ window.downloadPosterPNG = async function() {
   const resScalePng = (parseInt(document.getElementById('exp-res')?.value) || 100) / 100;
 
   try {
-    const canvas = await html2canvas(poster, { scale: resScalePng, useCORS: true, allowTaint: false, logging: false, width: _posterW, height: _posterH });
+    const canvas = (_topEmptyPng || _circleEmptyPng)
+      ? await _twoPassTransparent(poster, pTop, pCircle, _topEmptyPng, _circleEmptyPng,
+          { scale: resScalePng, useCORS: true, allowTaint: false, logging: false, width: _posterW, height: _posterH })
+      : await html2canvas(poster, { scale: resScalePng, useCORS: true, allowTaint: false, logging: false, width: _posterW, height: _posterH });
     canvas.toBlob(async blob => {
       await _saveBlob(blob, 'scapino-poster.png');
     }, 'image/png');
