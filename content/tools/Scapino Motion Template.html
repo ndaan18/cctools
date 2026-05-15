@@ -1022,6 +1022,14 @@ input[type="color"].tmpl-swatch {
             </div>
           </div>
         </div>
+        <!-- Render overlay — covers only the poster preview during video export -->
+        <div id="render-overlay" style="display:none;position:absolute;inset:0;z-index:99;background:rgba(242,242,242,0.92);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);flex-direction:column;align-items:center;justify-content:center;gap:0.75rem">
+          <div style="font-size:0.8rem;font-weight:500;color:var(--text);letter-spacing:-0.01em" id="render-overlay-label">Rendering…</div>
+          <div style="font-size:0.7rem;color:var(--muted)" id="render-overlay-sub"></div>
+          <div style="width:160px;background:var(--border);border-radius:2px;height:2px;overflow:hidden">
+            <div id="render-overlay-bar" style="background:var(--text);height:100%;width:0%;transition:width 0.2s linear;border-radius:2px"></div>
+          </div>
+        </div>
       </div>
     </div>
     <!-- Design panel -->
@@ -4279,13 +4287,5 @@ document.getElementById('btn-color-link').classList.add('active');
 document.getElementById('btn-canvas-lock').classList.add('active');
 </script>
 
-<!-- Full-screen render overlay — hides the flickering poster during video export -->
-<div id="render-overlay" style="display:none;position:fixed;inset:0;z-index:99999;background:#111;flex-direction:column;align-items:center;justify-content:center;gap:1rem">
-  <div style="color:#fff;font-size:0.85rem;font-weight:500;letter-spacing:0.02em" id="render-overlay-label">Rendering…</div>
-  <div style="color:#666;font-size:0.7rem" id="render-overlay-sub"></div>
-  <div style="width:220px;background:#2a2a2a;border-radius:3px;height:3px;overflow:hidden">
-    <div id="render-overlay-bar" style="background:#fff;height:100%;width:0%;transition:width 0.2s linear;border-radius:3px"></div>
-  </div>
-</div>
 </body>
 </html>
