@@ -3764,46 +3764,22 @@ function _loadScript(src) {
 
 async function _ensureFfmpeg() {
   if (_ffmpegInstance) return _ffmpegInstance;
-
   const FFMPEG_BASE = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd';
   const CORE_BASE   = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
   const UTIL_CDN    = 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js';
-
-  // When opened as a local file (origin = null), browsers block new Worker(CDN_URL).
-  // Fix: pre-fetch the worker chunk, create a blob URL, and patch the Worker constructor
-  // to redirect that CDN URL to the blob for the duration of ff.load().
-  const ffmpegJsText = await fetch(`${FFMPEG_BASE}/ffmpeg.js`).then(r => r.text()).catch(() => '');
-  const chunkMatch   = ffmpegJsText.match(/"(\d+\.ffmpeg\.js)"/);
-  let _origWorker    = null;
-
-  if (chunkMatch) {
-    const chunkCdnURL = `${FFMPEG_BASE}/${chunkMatch[1]}`;
-    const chunkText   = await fetch(chunkCdnURL).then(r => r.text());
-    const chunkBlob   = URL.createObjectURL(new Blob([chunkText], { type: 'text/javascript' }));
-    _origWorker = window.Worker;
-    window.Worker = function(url, opts) {
-      return new _origWorker(String(url) === chunkCdnURL ? chunkBlob : url, opts);
-    };
-    Object.setPrototypeOf(window.Worker, _origWorker);
-    window.Worker.prototype = _origWorker.prototype;
-  }
-
-  try {
-    await _loadScript(`${FFMPEG_BASE}/ffmpeg.js`);
-    await _loadScript(UTIL_CDN);
-    const { FFmpeg } = window.FFmpegWASM;
-    const { toBlobURL, fetchFile } = window.FFmpegUtil;
-    const ff = new FFmpeg();
-    ff.on('progress', ({ progress }) => { if (_ffmpegProgressCb) _ffmpegProgressCb(progress); });
-    await ff.load({
-      coreURL: await toBlobURL(`${CORE_BASE}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${CORE_BASE}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
-    _ffmpegInstance = { ff, fetchFile };
-    return _ffmpegInstance;
-  } finally {
-    if (_origWorker) window.Worker = _origWorker;
-  }
+  await _loadScript(`${FFMPEG_BASE}/ffmpeg.js`);
+  await _loadScript(UTIL_CDN);
+  const { FFmpeg } = window.FFmpegWASM;
+  const { toBlobURL, fetchFile } = window.FFmpegUtil;
+  const ff = new FFmpeg();
+  ff.on('progress', ({ progress }) => { if (_ffmpegProgressCb) _ffmpegProgressCb(progress); });
+  await ff.load({
+    classWorkerURL: await toBlobURL(`${FFMPEG_BASE}/814.ffmpeg.js`, 'text/javascript'),
+    coreURL:        await toBlobURL(`${CORE_BASE}/ffmpeg-core.js`,  'text/javascript'),
+    wasmURL:        await toBlobURL(`${CORE_BASE}/ffmpeg-core.wasm`, 'application/wasm'),
+  });
+  _ffmpegInstance = { ff, fetchFile };
+  return _ffmpegInstance;
 }
 
 window.downloadPosterMP4 = async function() {
