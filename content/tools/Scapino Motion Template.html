@@ -1310,6 +1310,16 @@ Rotterdam</textarea>
       </div>
       <div class="panel-footer">
         <button class="btn btn-dl" id="btn-dl-mp4" style="width:100%" onclick="downloadPosterMP4()">↓ Download MP4</button>
+        <button class="btn btn-dl" id="btn-dl-mov" style="width:100%;margin-top:0.4rem" onclick="downloadPosterMOV()">↓ Download MOV</button>
+        <div id="mov-progress-wrap" style="display:none;margin-top:0.5rem">
+          <div style="display:flex;justify-content:space-between;font-size:0.625rem;margin-bottom:0.25rem;color:var(--muted)">
+            <span id="mov-progress-label">Loading encoder…</span>
+            <span id="mov-progress-pct"></span>
+          </div>
+          <div style="background:var(--border,#ddd);border-radius:2px;height:3px;overflow:hidden">
+            <div id="mov-progress-bar" style="background:#222;height:100%;width:0%;border-radius:2px;transition:width 0.15s linear"></div>
+          </div>
+        </div>
         <button class="btn btn-dl" id="btn-dl-print" style="width:100%;margin-top:0.4rem" onclick="downloadPosterPrint()">↓ Download Print</button>
         <button class="btn" style="width:100%;margin-top:0.4rem;font-size:0.7rem" onclick="downloadPosterPNG()">↓ Download Still</button>
         <div style="margin-top:0.5rem;font-size:0.625rem;color:var(--muted);line-height:1.6">Upload local files for<br>best export quality.</div>
@@ -3738,6 +3748,64 @@ function _loadMp4Muxer() {
   });
 }
 
+let _ffmpegProgressCb = null;
+let _ffmpegInstance   = null;
+
+function _loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload  = resolve;
+    s.onerror = () => reject(new Error('Failed to load: ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+async function _ensureFfmpeg() {
+  if (_ffmpegInstance) return _ffmpegInstance;
+
+  const FFMPEG_BASE = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd';
+  const CORE_BASE   = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+  const UTIL_CDN    = 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js';
+
+  // When opened as a local file (origin = null), browsers block new Worker(CDN_URL).
+  // Fix: pre-fetch the worker chunk, create a blob URL, and patch the Worker constructor
+  // to redirect that CDN URL to the blob for the duration of ff.load().
+  const ffmpegJsText = await fetch(`${FFMPEG_BASE}/ffmpeg.js`).then(r => r.text()).catch(() => '');
+  const chunkMatch   = ffmpegJsText.match(/"(\d+\.ffmpeg\.js)"/);
+  let _origWorker    = null;
+
+  if (chunkMatch) {
+    const chunkCdnURL = `${FFMPEG_BASE}/${chunkMatch[1]}`;
+    const chunkText   = await fetch(chunkCdnURL).then(r => r.text());
+    const chunkBlob   = URL.createObjectURL(new Blob([chunkText], { type: 'text/javascript' }));
+    _origWorker = window.Worker;
+    window.Worker = function(url, opts) {
+      return new _origWorker(String(url) === chunkCdnURL ? chunkBlob : url, opts);
+    };
+    Object.setPrototypeOf(window.Worker, _origWorker);
+    window.Worker.prototype = _origWorker.prototype;
+  }
+
+  try {
+    await _loadScript(`${FFMPEG_BASE}/ffmpeg.js`);
+    await _loadScript(UTIL_CDN);
+    const { FFmpeg } = window.FFmpegWASM;
+    const { toBlobURL, fetchFile } = window.FFmpegUtil;
+    const ff = new FFmpeg();
+    ff.on('progress', ({ progress }) => { if (_ffmpegProgressCb) _ffmpegProgressCb(progress); });
+    await ff.load({
+      coreURL: await toBlobURL(`${CORE_BASE}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${CORE_BASE}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+    _ffmpegInstance = { ff, fetchFile };
+    return _ffmpegInstance;
+  } finally {
+    if (_origWorker) window.Worker = _origWorker;
+  }
+}
+
 window.downloadPosterMP4 = async function() {
   const btn = document.getElementById('btn-dl-mp4');
   if (btn && btn.disabled) return;
@@ -3905,6 +3973,193 @@ window.downloadPosterMP4 = async function() {
                             topHasImg, circleHasImg, topHasVid, circleHasVid);
     scatterReset();
     if (btn) { btn.disabled = false; btn.textContent = '↓ Download MP4'; }
+  }
+};
+
+// ── Download MOV (ffmpeg.wasm, ProRes 4444 with alpha) ───────────
+function _showMovProgress(label, pct) {
+  const wrap = document.getElementById('mov-progress-wrap');
+  const lEl  = document.getElementById('mov-progress-label');
+  const pEl  = document.getElementById('mov-progress-pct');
+  const bar  = document.getElementById('mov-progress-bar');
+  if (!wrap) return;
+  wrap.style.display = '';
+  lEl.textContent = label;
+  if (pct == null) {
+    pEl.textContent = '';
+    bar.style.width = '0%';
+  } else {
+    const p = Math.round(pct * 100);
+    pEl.textContent = p + '%';
+    bar.style.width = p + '%';
+  }
+}
+
+function _hideMovProgress() {
+  const wrap = document.getElementById('mov-progress-wrap');
+  if (!wrap) return;
+  wrap.style.display = 'none';
+  const bar = document.getElementById('mov-progress-bar');
+  if (bar) bar.style.width = '0%';
+}
+
+window.downloadPosterMOV = async function() {
+  const btn = document.getElementById('btn-dl-mov');
+  if (btn && btn.disabled) return;
+  if (btn) { btn.disabled = true; btn.textContent = '◌ Loading encoder…'; }
+
+  _updateScatterParams();
+  if (!_scatter) _scatterInit();
+
+  const poster       = document.getElementById('poster');
+  const pTop         = poster.querySelector('.p-top');
+  const pCircle      = poster.querySelector('.p-circle');
+  const colEls       = poster.querySelectorAll('.p-col');
+  const placeholders = poster.querySelectorAll('.p-placeholder');
+
+  const imgTop    = document.getElementById('p-photo-top');
+  const imgCircle = document.getElementById('p-photo-circle');
+  const vidTop    = document.getElementById('p-video-top');
+  const vidCircle = document.getElementById('p-video-circle');
+  const topHasImg    = !imgTop.hasAttribute('data-empty')    && imgTop.src;
+  const circleHasImg = !imgCircle.hasAttribute('data-empty') && imgCircle.src;
+  const topHasVid    = !vidTop.hasAttribute('data-empty')    && vidTop.src && vidTop.videoWidth;
+  const circleHasVid = !vidCircle.hasAttribute('data-empty') && vidCircle.src && vidCircle.videoWidth;
+
+  const topEmpty    = !topHasImg    && !topHasVid;
+  const circleEmpty = !circleHasImg && !circleHasVid;
+
+  const saved = _exportBuildOverrides(poster, pTop, pCircle, colEls, placeholders);
+
+  function seekVid(v, elapsedMs) {
+    if (!v || !v.src || v.hasAttribute('data-empty')) return Promise.resolve();
+    const t      = Math.max(0, elapsedMs / 1000);
+    const dur    = v.duration;
+    const target = (isFinite(dur) && dur > 0) ? Math.min(t, Math.max(0, dur - 0.001)) : t;
+    if (Math.abs(v.currentTime - target) < 1/60) return Promise.resolve();
+    return new Promise(resolve => {
+      v.addEventListener('seeked', resolve, { once: true });
+      try { v.currentTime = target; } catch(_) { resolve(); }
+    });
+  }
+
+  const ssMov   = Math.min(_posterW, _posterH);
+  const cszMov  = ssMov;
+  const topHMov = Math.max(0, _posterH - cszMov);
+
+  if (topHasImg) {
+    imgTop.style.display = 'none';
+    const url = _renderFramedToDataURL(imgTop, imgTop.naturalWidth, imgTop.naturalHeight, _posterW, topHMov, _framing.top);
+    if (url) { pTop.style.backgroundImage = `url("${url}")`; pTop.style.backgroundSize = '100% 100%'; pTop.style.backgroundPosition = '0 0'; }
+  }
+  if (circleHasImg) {
+    imgCircle.style.display = 'none';
+    const url = _renderFramedToDataURL(imgCircle, imgCircle.naturalWidth, imgCircle.naturalHeight, cszMov, cszMov, _framing.circle);
+    if (url) { pCircle.style.backgroundImage = `url("${url}")`; pCircle.style.backgroundSize = '100% 100%'; pCircle.style.backgroundPosition = '0 0'; }
+  }
+  if (topHasVid)    vidTop.style.display    = 'none';
+  if (circleHasVid) vidCircle.style.display = 'none';
+
+  async function applyFrameBg(elapsedMs) {
+    if (topHasVid) {
+      await seekVid(vidTop, elapsedMs);
+      const url = _renderFramedToDataURL(vidTop, vidTop.videoWidth, vidTop.videoHeight, _posterW, topHMov, _framing.top);
+      if (url) { pTop.style.backgroundImage = `url("${url}")`; pTop.style.backgroundSize = '100% 100%'; pTop.style.backgroundPosition = '0 0'; }
+    }
+    if (circleHasVid) {
+      await seekVid(vidCircle, elapsedMs);
+      const url = _renderFramedToDataURL(vidCircle, vidCircle.videoWidth, vidCircle.videoHeight, cszMov, cszMov, _framing.circle);
+      if (url) { pCircle.style.backgroundImage = `url("${url}")`; pCircle.style.backgroundSize = '100% 100%'; pCircle.style.backgroundPosition = '0 0'; }
+    }
+  }
+
+  const fps       = parseInt(document.getElementById('exp-fps')?.value)  || 24;
+  const resScale  = (parseInt(document.getElementById('exp-res')?.value)  || 100) / 100;
+  const frameMs   = 1000 / fps;
+  const motionTotal = _motionTotalMs();
+  const totalFrames = Math.ceil(motionTotal / frameMs);
+  const h2cOpts   = { scale: resScale, width: _posterW, height: _posterH, useCORS: true, allowTaint: false, logging: false };
+
+  let ff = null, fetchFile = null;
+
+  try {
+    _showMovProgress('Loading encoder…', null);
+
+    let ffInst;
+    try {
+      ffInst = await _ensureFfmpeg();
+    } catch(e) {
+      alert('Could not load ffmpeg encoder: ' + e.message);
+      return;
+    }
+    ff = ffInst.ff;
+    fetchFile = ffInst.fetchFile;
+
+    if (btn) btn.textContent = '◌ 0%';
+
+    for (let f = 0; f <= totalFrames; f++) {
+      const elapsedWall = Math.min(f * frameMs, motionTotal);
+      const scatterMs   = Math.min(_motionRemapApply(elapsedWall), SCATTER_TOTAL_MS);
+
+      _scatterApplyElapsed(scatterMs);
+      await applyFrameBg(elapsedWall);
+
+      const canvas = (topEmpty || circleEmpty)
+        ? await _twoPassTransparent(poster, pTop, pCircle, topEmpty, circleEmpty, h2cOpts)
+        : await html2canvas(poster, h2cOpts);
+
+      const pngBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+      const name    = `frame_${String(f + 1).padStart(5, '0')}.png`;
+      await ff.writeFile(name, await fetchFile(pngBlob));
+
+      const pct = (f + 1) / (totalFrames + 1);
+      _showMovProgress(`Rendering frame ${f + 1} / ${totalFrames + 1}`, pct * 0.9);
+      if (btn) btn.textContent = `◌ ${Math.round(pct * 90)}%`;
+    }
+
+    _showMovProgress('Encoding ProRes 4444…', 0.9);
+    if (btn) btn.textContent = '◌ Encoding…';
+
+    _ffmpegProgressCb = (p) => _showMovProgress('Encoding ProRes 4444…', 0.9 + p * 0.1);
+
+    await ff.exec([
+      '-framerate', String(fps),
+      '-i', 'frame_%05d.png',
+      '-c:v', 'prores_ks',
+      '-profile:v', '4',
+      '-pix_fmt', 'yuva444p10le',
+      '-qscale:v', '4',
+      '-vendor', 'apl0',
+      '-color_primaries', 'bt709',
+      '-color_trc', 'bt709',
+      '-colorspace', 'bt709',
+      'output.mov',
+    ]);
+
+    _ffmpegProgressCb = null;
+
+    if (btn) btn.textContent = '◌ Saving…';
+    const outData = await ff.readFile('output.mov');
+    await _saveBlob(new Blob([outData.buffer], { type: 'video/quicktime' }), 'scapino-poster.mov');
+
+  } catch(e) {
+    _ffmpegProgressCb = null;
+    console.error(e);
+    alert('MOV export failed: ' + (e && e.message ? e.message : e));
+  } finally {
+    _ffmpegProgressCb = null;
+    if (ff) {
+      for (let f = 0; f <= totalFrames; f++) {
+        ff.deleteFile(`frame_${String(f + 1).padStart(5, '0')}.png`).catch(() => {});
+      }
+      ff.deleteFile('output.mov').catch(() => {});
+    }
+    _exportRestoreOverrides(poster, pTop, pCircle, colEls, placeholders, saved,
+                            imgTop, imgCircle, vidTop, vidCircle,
+                            topHasImg, circleHasImg, topHasVid, circleHasVid);
+    scatterReset();
+    _hideMovProgress();
+    if (btn) { btn.disabled = false; btn.textContent = '↓ Download MOV'; }
   }
 };
 
