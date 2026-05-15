@@ -2966,6 +2966,33 @@ window.tmplExpMbpsChange = function(mbps) {
   _mbpsOffset = mbps - fps * 2;
 };
 
+async function _promptSaveHandle(suggestedName, mimeType, ext) {
+  if (!('showSaveFilePicker' in window)) return null;
+  try {
+    return await window.showSaveFilePicker({
+      suggestedName,
+      types: [{ description: ext.toUpperCase() + ' file', accept: { [mimeType]: ['.' + ext] } }],
+    });
+  } catch(e) {
+    if (e.name === 'AbortError') return 'cancelled';
+    return null;
+  }
+}
+
+async function _writeToHandle(handle, blob, fallbackName) {
+  if (handle) {
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+  } else {
+    const a = Object.assign(document.createElement('a'), {
+      download: fallbackName, href: URL.createObjectURL(blob),
+    });
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+}
+
 async function _saveBlob(blob, suggestedName) {
   if ('showSaveFilePicker' in window) {
     const ext  = suggestedName.split('.').pop();
@@ -3816,6 +3843,8 @@ async function _ensureFfmpeg() {
 window.downloadPosterMP4 = async function() {
   const btn = document.getElementById('btn-dl-mp4');
   if (btn && btn.disabled) return;
+  const _mp4Handle = await _promptSaveHandle('scapino-poster.mp4', 'video/mp4', 'mp4');
+  if (_mp4Handle === 'cancelled') return;
   if (btn) { btn.disabled = true; btn.textContent = '◌ Preparing…'; }
 
   if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined') {
@@ -3972,7 +4001,7 @@ window.downloadPosterMP4 = async function() {
     muxer.finalize();
 
     const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
-    await _saveBlob(blob, 'scapino-poster.mp4');
+    await _writeToHandle(_mp4Handle, blob, 'scapino-poster.mp4');
 
   } catch(e) {
     console.error(e);
@@ -4033,6 +4062,8 @@ function _hideRenderOverlay() {
 window.downloadPosterMOV = async function() {
   const btn = document.getElementById('btn-dl-mov');
   if (btn && btn.disabled) return;
+  const _movHandle = await _promptSaveHandle('scapino-poster.mov', 'video/quicktime', 'mov');
+  if (_movHandle === 'cancelled') return;
   if (btn) { btn.disabled = true; btn.textContent = '◌ Loading encoder…'; }
 
   _updateScatterParams();
@@ -4175,7 +4206,7 @@ window.downloadPosterMOV = async function() {
 
     if (btn) btn.textContent = '◌ Saving…';
     const outData = await ff.readFile('output.mov');
-    await _saveBlob(new Blob([outData.buffer], { type: 'video/quicktime' }), 'scapino-poster.mov');
+    await _writeToHandle(_movHandle, new Blob([outData.buffer], { type: 'video/quicktime' }), 'scapino-poster.mov');
 
   } catch(e) {
     _ffmpegProgressCb = null;
